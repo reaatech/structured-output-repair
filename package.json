@@ -38,7 +38,7 @@
     "postbuild": "chmod +x dist/mcp/index.js"
   },
   "dependencies": {
-    "zod": "^3.23.0",
+    "zod": "^4.3.6",
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "devDependencies": {
