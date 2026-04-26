@@ -1,0 +1,77 @@
+{
+  "name": "structured-output-repair",
+  "version": "1.0.0",
+  "description": "Repair malformed LLM structured outputs instead of crashing",
+  "author": "Rick Somers <rick@reaatech.com> (https://reaatech.com)",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp/index.d.ts",
+      "import": "./dist/mcp/index.js"
+    }
+  },
+  "bin": {
+    "structured-repair": "./dist/mcp/index.js"
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "bench": "vitest bench --run",
+    "lint": "eslint src/ test/",
+    "format": "prettier --write src/ test/",
+    "format:check": "prettier --check src/ test/",
+    "typecheck": "tsc --noEmit",
+    "docs": "typedoc src/index.ts",
+    "prepublishOnly": "pnpm build && pnpm test",
+    "postbuild": "chmod +x dist/mcp/index.js"
+  },
+  "dependencies": {
+    "zod": "^3.23.0",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "^1.3.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.0",
+    "tsup": "^8.0.0",
+    "typedoc": "^0.25.0",
+    "typescript": "^5.4.0",
+    "typescript-eslint": "^7.0.0",
+    "vitest": "^1.3.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "llm",
+    "ai",
+    "json",
+    "repair",
+    "zod",
+    "schema",
+    "validation",
+    "structured-output",
+    "mcp"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reaatech/structured-output-repair.git"
+  },
+  "bugs": {
+    "url": "https://github.com/reaatech/structured-output-repair/issues"
+  },
+  "homepage": "https://github.com/reaatech/structured-output-repair#readme"
+}
