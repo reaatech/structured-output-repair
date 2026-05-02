@@ -1,216 +1,194 @@
 # Skill: Implementation
 
-**Category**: Core Development  
-**Difficulty**: Advanced  
+**Category**: Core Development
+**Difficulty**: Advanced
 **Estimated Time**: 2-4 hours per repair strategy
 
 ## Overview
 
-This skill covers the implementation of core library functionality, including repair strategies, the repair pipeline orchestrator, and the public API.
+This skill covers the implementation of core library functionality within the `@reaatech/structured-repair-core` package, including repair strategies, the repair pipeline orchestrator, and the public API.
 
 ## Capabilities
 
 An AI agent with this skill can:
 
-1. **Implement Repair Strategies**
-   - `strip-fences.ts` - Remove markdown code fence wrappers
-   - `fix-json.ts` - Repair JSON syntax errors (trailing commas, missing braces, etc.)
-   - `coerce-types.ts` - Use Zod coercion for type mismatches
-   - `remove-extra-fields.ts` - Strip hallucinated fields not in schema
+1. **Implement Repair Strategies** (`packages/core/src/repair/`)
+   - `strip-fences.ts` — Remove markdown code fence wrappers
+   - `fix-json.ts` — Repair JSON syntax errors (trailing commas, missing braces, etc.)
+   - `coerce-types.ts` — Use Zod coercion for type mismatches, rebuild schemas with coercers
+   - `remove-extra-fields.ts` — Strip hallucinated fields not in schema, recursive
 
-2. **Build Repair Pipeline**
-   - Create graduated repair orchestrator
-   - Implement strategy chaining with fallback
-   - Track repair steps and errors
-   - Handle success/failure states
+2. **Build Repair Pipeline** (`packages/core/src/repair/index.ts`)
+   - Phase 1: String strategies (sequential)
+   - Phase 2: JSON parse
+   - Phase 3: Direct Zod validation
+   - Phase 4: Object strategies (iterative, max 3 passes)
 
-3. **Develop Public API**
-   - `repair()` - Quick repair function
-   - `repairOutput()` - Full options repair
-   - `isValid()` - Validation check
-   - `analyzeInput()` - Input analysis without repair
+3. **Develop Public API** (`packages/core/src/index.ts`)
+   - `repair(schema, input)` — Quick repair, throws on failure
+   - `repairOutput(options)` — Full options repair with detailed result
+   - `isValid(schema, input)` — Boolean validation check
+   - `analyzeInput(input)` — Input analysis without repair
 
-4. **Error Handling**
-   - Custom error classes (UnrepairableError, SchemaMismatchError, etc.)
-   - Contextual error information
-   - Graceful degradation
+4. **Error Handling** (`packages/core/src/utils/errors.ts`)
+   - `StructuredRepairError` — Base class with `code` and `context`
+   - `UnrepairableError` — All strategies exhausted
+   - `SchemaMismatchError` — Type coercion failed
+   - `JsonSyntaxError` — Input not parseable as JSON
 
 5. **Type Safety**
-   - Full TypeScript generics for schema inference
-   - Strict type checking throughout
-   - No `any` types in public API
+   - Full generic inference: `repair(schema)` returns `z.infer<T>`
+   - All types exported from `packages/core/src/repair/types.ts`
+   - `RepairStrategyName`, `RepairOptions<T>`, `RepairResult<T>`, `RepairStep`
+   - No `any` in public API; Zod internal access uses biome-ignore comments
 
 ## When to Use This Skill
 
-- Implementing new repair strategies
-- Building the core repair pipeline
+- Implementing a new repair strategy
+- Refactoring the repair pipeline orchestrator
 - Adding new public API methods
-- Refactoring existing repair logic
-- Optimizing repair performance
+- Fixing type coercion bugs
+- Adding support for new Zod schema types in `coerce-types` or `remove-extra-fields`
 
 ## Example Requests
 
 ```
-"Implement the strip-fences repair strategy following DEV_PLAN.md specs"
+"Implement a new repair strategy for the core package"
 
-"Create the repair pipeline orchestrator with graduated strategies"
+"Add support for ZodMap in the coerce-types strategy"
 
-"Add type coercion using Zod's built-in coerce feature"
+"Fix a bug in the remove-extra-fields recursive walker"
 
-"Implement the remove-extra-fields strategy for nested objects"
-
-"Create the public repair() API with full type inference"
+"Add a new option to repairOutput for controlling max passes"
 ```
 
 ## Output Expectations
 
 After using this skill, the agent should deliver:
 
-- [ ] Strategy implementation following DEV_PLAN.md specifications
+- [ ] Strategy implementation in `packages/core/src/repair/`
+- [ ] Registered in the pipeline (`repair/index.ts`)
 - [ ] Full TypeScript types with strict mode
-- [ ] JSDoc comments on all public APIs
-- [ ] Unit tests for implemented functionality
+- [ ] JSDoc comments on all public exports
+- [ ] Colocated tests at `packages/core/src/repair/<name>.test.ts`
 - [ ] Error handling for edge cases
-- [ ] Performance considerations documented
+- [ ] All existing tests still pass (`pnpm test`)
 
 ## Dependencies
 
 This skill requires:
-- Setup skill completed (project structure in place)
-- Understanding of Zod schema validation
+- Setup skill completed (monorepo structure in place)
+- Core package built (`pnpm build`)
+- Understanding of Zod schema validation internals
 - Knowledge of JSON syntax and parsing
 - Familiarity with TypeScript generics
-- Access to DEV_PLAN.md for specifications
 
-## Technical Specifications
+## Package Structure
 
-### Repair Strategy Interface
+```
+packages/core/
+├── src/
+│   ├── index.ts              # Public API barrel (repair, repairOutput, isValid, analyzeInput)
+│   ├── repair/
+│   │   ├── index.ts          # Pipeline orchestrator + strategy registry
+│   │   ├── types.ts          # RepairOptions<T>, RepairResult<T>, RepairStep, etc.
+│   │   ├── strip-fences.ts   # Strategy 1: markdown fence removal
+│   │   ├── fix-json.ts       # Strategy 2: JSON syntax repair
+│   │   ├── coerce-types.ts   # Strategy 3: Zod type coercion
+│   │   └── remove-extra-fields.ts  # Strategy 4: hallucinated field removal
+│   ├── types/
+│   │   └── index.ts          # Type re-exports
+│   └── utils/
+│       ├── errors.ts         # Error class hierarchy
+│       └── logger.ts         # Debug logger
+├── package.json
+├── tsconfig.json
+└── vitest.config.ts
+```
+
+## Repair Pipeline Flow
 
 ```typescript
-export type RepairHandler = (input: string, schema?: z.ZodType) => string | unknown;
+// Phase 1: String strategies (operate on raw string)
+for (const strategy of stringStrategies) {
+  input = strategy(input);
+  steps.push({ strategy, success: true, inputBefore, outputAfter: input });
+}
 
-export interface RepairStrategyConfig {
-  name: string;
-  handler: RepairHandler;
-  description: string;
-  canRecover: (error: Error) => boolean;
+// Phase 2: Parse JSON
+let parsed = JSON.parse(input);
+// On failure: return failure with syntax error
+
+// Phase 3: Direct validation
+const result = schema.safeParse(parsed);
+if (result.success) return { success: true, data: result.data };
+
+// Phase 4: Object strategies (operate on parsed object, iterative)
+for (let pass = 0; pass < MAX_PASSES; pass++) {
+  for (const strategy of objectStrategies) {
+    parsed = strategy(schema, parsed);
+    steps.push({ strategy, ... });
+    const recheck = schema.safeParse(parsed);
+    if (recheck.success) return { success: true, data: recheck.data };
+  }
 }
 ```
 
-### Pipeline Flow
+## Technical Specifications
 
-1. **Input Validation** - Check if input is valid JSON
-2. **Strip Fences** - Remove markdown wrappers
-3. **Fix JSON Syntax** - Repair common JSON errors
-4. **Parse JSON** - Convert string to object
-5. **Coerce Types** - Apply Zod coercion
-6. **Remove Extra Fields** - Clean hallucinated fields
-7. **Validate Schema** - Final validation against schema
-8. **Relax Schema** - Last resort attempt
+### Adding a New Strategy
 
-### Error Recovery
+1. Create `packages/core/src/repair/<name>.ts` exporting a function
+2. Register it in `packages/core/src/repair/index.ts`:
+   - String strategy: add to `STRING_STRATEGIES` map
+   - Object strategy: add to `OBJECT_STRATEGIES` map
+3. Add the strategy name to `RepairStrategyName` union in `types.ts`
+4. Create `packages/core/src/repair/<name>.test.ts` with colocated tests
 
-Each strategy should:
-- Accept input string
-- Return repaired string or parsed object
-- Throw specific error types on failure
-- Be idempotent (safe to run multiple times)
+### Zod Internal Access Patterns
+
+The `coerce-types` and `remove-extra-fields` strategies access Zod internals via `_def` to walk recursive schema trees. Each access uses a biome-ignore comment:
+
+```typescript
+// biome-ignore lint/suspicious/noExplicitAny: accessing Zod internals
+const shape = (schema as any)._def.shape;
+```
+
+### Import Conventions
+
+- Within core: use relative `.js` extension imports (`'./strip-fences.js'`)
+- Within mcp importing core: use scoped package import (`'@reaatech/structured-repair-core'`)
+- Tests: import from sibling source files (`'./coerce-types.js'`)
 
 ## Best Practices
 
-1. **Single Responsibility** - Each strategy does one thing well
-2. **Fail Fast** - Validate early, fail with clear errors
-3. **Preserve Data** - Never lose information during repair
-4. **Document Patterns** - Comment what patterns each strategy handles
-5. **Test Edge Cases** - Test with malformed, nested, and complex inputs
-6. **Performance First** - Optimize for common cases
-7. **Type Safety** - Use TypeScript to prevent runtime errors
-
-## Common Patterns Handled
-
-### strip-fences
-```typescript
-// Input patterns
-'```json\n{ ... }\n```'
-'```JSON\n{ ... }\n```'
-'```javascript\n{ ... }\n```'
-'````json\n```json\n{ ... }\n```\n````'
-```
-
-### fix-json
-```typescript
-// Trailing commas
-'{ "a": 1, }' → '{ "a": 1 }'
-
-// Missing closing braces
-'{ "a": 1' → '{ "a": 1 }'
-
-// Unquoted keys
-'{ a: 1 }' → '{ "a": 1 }'
-
-// Single quotes
-"{ 'a': 1 }" → '{ "a": 1 }'
-
-// Missing commas
-'{ "a": 1 "b": 2 }' → '{ "a": 1, "b": 2 }'
-
-// Invalid values
-'{ "a": NaN }' → '{ "a": null }'
-```
-
-### coerce-types
-Note: Zod does not provide a built-in way to programmatically coerce an arbitrary schema. Implementing this requires walking the Zod schema tree and rebuilding it with coerced variants (`z.coerce.number()`, `z.coerce.boolean()`, etc.) while preserving structure and optionality.
-
-```typescript
-// String to number
-schema: z.object({ age: z.number() })
-input: { age: "30" } → { age: 30 }
-
-// String to boolean
-schema: z.object({ active: z.boolean() })
-input: { active: "true" } → { active: true }
-
-// Array wrapping
-schema: z.object({ items: z.array(z.number()) })
-input: { items: 1 } → { items: [1] }
-```
-
-## Testing Strategy
-
-Each repair strategy should have tests for:
-
-1. **Happy Path** - Common, well-formed input
-2. **Edge Cases** - Unusual but valid input
-3. **Malformed Input** - Broken JSON that can be fixed
-4. **Unfixable Input** - Input that should fail gracefully
-5. **Performance** - Large inputs, nested structures
-6. **Idempotency** - Running repair multiple times
+1. **Single Responsibility** — Each strategy does one thing well
+2. **Pure Functions** — String strategies are pure; object strategies may modify in place
+3. **Fail Fast** — Validate early, fail with clear error codes
+4. **Preserve Data** — Never lose information during repair
+5. **Test Edge Cases** — Test with malformed, nested, and complex LLM outputs
+6. **Idempotence** — Running repair multiple times on already-valid input is safe
+7. **Type Safety** — Use TypeScript generics; only use `any` with biome-ignore for Zod internals
 
 ## Troubleshooting
 
-### Common Issues
+### Issue: Strategy over-corrects valid JSON
+- **Solution**: The pipeline validates after each phase; over-correction is caught
 
-**Issue**: Strategy over-corrects and breaks valid JSON
-- **Solution**: Add validation before applying repair
+### Issue: Type coercion doesn't handle a new Zod type
+- **Solution**: Add a branch for the type in `makeCoercedSchema()` using `instanceof` checks
 
-**Issue**: Type coercion loses precision or is hard to implement for arbitrary schemas
-- **Solution**: Start with support for common Zod types (ZodNumber, ZodBoolean, ZodString, ZodArray, ZodObject, ZodOptional). Document unsupported types.
-
-**Issue**: Extra fields removal breaks nested structures
-- **Solution**: Recursively walk schema tree and only remove at leaf level
-
-**Issue**: Performance degradation on large inputs
-- **Solution**: Optimize regex patterns, avoid unnecessary string operations
+### Issue: Extra field removal breaks union validation
+- **Solution**: `remove-extra-fields` tries each union branch and returns the first valid result
 
 ## Resources
 
 - [Zod Documentation](https://zod.dev/)
-- [JSON Specification](https://www.json.org/json-en.html)
-- [TypeScript Generics](https://www.typescriptlang.org/docs/handbook/2/generics.html)
-- [DEV_PLAN.md](../DEV_PLAN.md) - Full implementation specifications
+- [Zod Source (internal types)](https://github.com/colinhacks/zod/tree/master/src)
+- [DEV_PLAN.md](../DEV_PLAN.md) — Full implementation specifications
 
 ## Related Skills
 
-- [`setup.md`](./setup.md) - Project initialization
-- [`testing.md`](./testing.md) - Writing comprehensive tests
-- [`documentation.md`](./documentation.md) - API documentation
+- [`setup.md`](./setup.md) — Project initialization
+- [`testing.md`](./testing.md) — Writing comprehensive tests
+- [`documentation.md`](./documentation.md) — API documentation

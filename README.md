@@ -1,38 +1,67 @@
 # structured-output-repair
 
-[![npm version](https://badge.fury.io/js/structured-output-repair.svg)](https://badge.fury.io/js/structured-output-repair)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI](https://github.com/reaatech/structured-output-repair/actions/workflows/ci.yml/badge.svg)](https://github.com/reaatech/structured-output-repair/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)](https://www.typescriptlang.org/)
 
 > Repair malformed LLM structured outputs instead of crashing.
 
-Every production agent system has this problem: you ask for JSON, you get JSON wrapped in markdown fences, or missing a closing brace, or with trailing commas, or with hallucinated fields. This library takes a **Zod schema** + the raw LLM output and attempts graduated repair:
+Every production agent system has this problem: you ask for JSON, you get JSON wrapped in markdown fences, or with trailing commas, or missing closing braces, or with hallucinated fields. This library takes a **Zod schema** plus the raw LLM output and attempts graduated repair across four strategies — it either returns valid, schema-conforming data or gives you detailed diagnostics explaining what went wrong.
 
-1. **Strip markdown fences** — Remove ` ```json ... ``` ` wrappers
-2. **Fix JSON syntax** — Repair trailing commas, missing braces, unquoted keys, single quotes, etc.
-3. **Coerce types** — Use Zod's built-in coercion to handle string→number, string→boolean, etc.
-4. **Remove extra fields** — Strip hallucinated fields not in your schema (great for `.strict()` schemas)
+This monorepo provides a core repair engine library and an MCP server tool for use with Claude Desktop and other MCP-compatible clients.
 
-Ships as both an **npm library** and an **MCP tool** (`structured.repair`).
+## Features
 
----
+- **Four graduated repair strategies** — strip-fences, fix-json-syntax, coerce-types, remove-extra-fields
+- **Full type inference** — repaired data inherits the exact `z.infer<T>` type from your Zod schema
+- **Detailed failure diagnostics** — per-strategy step tracking, accumulated errors, and on-failure callbacks
+- **Input analysis** — inspect raw LLM output for common issues without applying repairs
+- **MCP server** — expose repair functionality as MCP tools (`structured.repair`, `structured.analyze`) for Claude Desktop and other clients
+- **JSON Schema → Zod conversion** — the MCP tool accepts standard JSON Schema; no programmatic Zod required
+- **Strategy customization** — pick which strategies to run, in what order
+- **Dual ESM/CJS output** — works with `import` and `require`
 
 ## Installation
 
+### Using the packages
+
+Packages are published under the `@reaatech` scope and can be installed individually:
+
 ```bash
-npm install structured-output-repair zod
-# or
-pnpm add structured-output-repair zod
+# Core repair engine
+pnpm add @reaatech/structured-repair-core
+
+# MCP server tool
+pnpm add @reaatech/structured-repair-mcp
 ```
 
-**Requirements:** Node.js 20+
+### Contributing
 
----
+```bash
+# Clone the repository
+git clone https://github.com/reaatech/structured-output-repair.git
+cd structured-output-repair
+
+# Install dependencies
+pnpm install
+
+# Build all packages
+pnpm build
+
+# Run the test suite
+pnpm test
+
+# Run linting
+pnpm lint
+```
 
 ## Quick Start
 
+Repair LLM output with a single function call:
+
 ```typescript
-import { z } from 'zod';
-import { repair } from 'structured-output-repair';
+import { z } from "zod";
+import { repair } from "@reaatech/structured-repair-core";
 
 const userSchema = z.object({
   name: z.string(),
@@ -40,149 +69,48 @@ const userSchema = z.object({
   email: z.string().email().optional(),
 });
 
-// LLM output with multiple issues
-const llmOutput = '```json\n{ "name": "John", "age": "30", "email": "john@example.com" }\n```';
+// LLM output with multiple issues — fences, trailing comma, string coercion
+const llmOutput = '```json\n{ "name": "John", "age": "30" }\n```';
 
 const result = await repair(userSchema, llmOutput);
-// result: { name: "John", age: 30, email: "john@example.com" }
+// => { name: "John", age: 30 }
 ```
 
----
-
-## API
-
-### `repair(schema, input)`
-
-Quick repair that throws `UnrepairableError` if the input cannot be fixed.
-
-```typescript
-import { repair } from 'structured-output-repair';
-
-const data = await repair(mySchema, rawLlmOutput);
-```
-
-### `repairOutput(options)`
-
-Full repair with detailed result information.
-
-```typescript
-import { repairOutput } from 'structured-output-repair';
-
-const result = await repairOutput({
-  schema: mySchema,
-  input: rawLlmOutput,
-  debug: true,
-  strategies: ['strip-fences', 'fix-json-syntax', 'coerce-types'],
-  onFailure: (context) => {
-    console.error('Repair failed:', context.errors);
-  },
-});
-
-if (result.success) {
-  console.log('Repaired:', result.data);
-} else {
-  console.log('Steps:', result.steps);
-  console.log('Errors:', result.errors);
-}
-```
-
-### `isValid(schema, input)`
-
-Check if input is valid against the schema without repair.
-
-```typescript
-import { isValid } from 'structured-output-repair';
-
-const ok = isValid(mySchema, '{ "name": "test" }');
-```
-
-### `analyzeInput(input)`
-
-Analyze input for common issues without applying repairs.
-
-```typescript
-import { analyzeInput } from 'structured-output-repair';
-
-const analysis = analyzeInput('```json\n{ "a": 1, }\n```');
-// {
-//   isValidJson: false,
-//   hasFences: true,
-//   issues: [
-//     { type: 'fence-wrapper', description: '...' },
-//     { type: 'trailing-comma', description: '...' }
-//   ]
-// }
-```
-
----
-
-## MCP Tool
-
-Use `structured-output-repair` as an MCP server with Claude Desktop or any MCP client.
-
-### Claude Desktop Configuration
-
-Add to your `claude_desktop_config.json`:
+Use the MCP server with Claude Desktop:
 
 ```json
 {
   "mcpServers": {
     "structured-repair": {
       "command": "npx",
-      "args": ["structured-repair"]
+      "args": ["@reaatech/structured-repair-mcp"]
     }
   }
 }
 ```
 
-### Available Tools
+## Packages
 
-- **`structured.repair`** — Repair malformed LLM output against a JSON Schema
-- **`structured.analyze`** — Analyze input for repair issues without applying repairs
-
-### Supported JSON Schema subset
-
-The MCP server converts JSON Schema to Zod for validation. Supported keywords:
-`type` (`string`, `number`, `integer`, `boolean`, `null`, `object`, `array`),
-`properties`, `required`, `items`, `enum`, `minimum`, `maximum`, `minLength`,
-`maxLength`, `pattern`.
-
-Not yet supported: `$ref`, `$defs`, `allOf`, `anyOf`, `oneOf`,
-`additionalProperties`, `format`.
-
-> **Note:** `pattern` is compiled with `new RegExp(...)`. Only pass schemas from
-> trusted sources — a pathological pattern can cause catastrophic backtracking
-> (ReDoS) in the server process.
-
----
+| Package | Description |
+| ------- | ----------- |
+| [`@reaatech/structured-repair-core`](./packages/core) | Core repair engine with four graduated strategies, types, and error classes |
+| [`@reaatech/structured-repair-mcp`](./packages/mcp) | MCP server exposing repair as tools for Claude Desktop and other MCP clients |
 
 ## Repair Strategies
 
 | Strategy | What it fixes |
 |----------|---------------|
-| `strip-fences` | ` ```json {...} ``` `, ` ```javascript {...} ``` `, nested fences |
+| `strip-fences` | Markdown code fences (` ```json {...} ``` `), nested fences, language hints |
 | `fix-json-syntax` | Trailing commas, missing braces/brackets, unquoted keys, single quotes, missing commas, `NaN`/`Infinity`/`undefined`, comments |
-| `coerce-types` | String→number, string→boolean, string→bigint, string→date, array wrapping |
-| `remove-extra-fields` | Hallucinated fields not in schema (useful with `.strict()`) |
+| `coerce-types` | String→number, string→boolean, string→bigint, string→date, nested object/array coercion |
+| `remove-extra-fields` | Hallucinated fields not in schema, deeply nested (works with `.strict()` schemas) |
 
----
+## Documentation
 
-## TypeScript
-
-Written in strict TypeScript with full type inference from your Zod schemas.
-
-```typescript
-const schema = z.object({ id: z.number(), name: z.string() });
-const result = await repair(schema, input);
-// result is typed as { id: number; name: string }
-```
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and contribution guidelines.
+- [`AGENTS.md`](./AGENTS.md) — AI agent development guide, coding conventions, and monorepo structure
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — Contribution workflow, coding standards, and release process
+- [`DEV_PLAN.md`](./DEV_PLAN.md) — Complete implementation specification
 
 ## License
 
-MIT — see [LICENSE](./LICENSE) for details.
+[MIT](LICENSE)
