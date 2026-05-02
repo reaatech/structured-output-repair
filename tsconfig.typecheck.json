@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@reaatech/structured-repair-core": ["./packages/core/src/index.ts"],
+      "@reaatech/structured-repair-mcp": ["./packages/mcp/src/index.ts"]
+    }
+  },
+  "include": ["packages/*/src"],
+  "exclude": ["node_modules", "dist", ".turbo"]
+}
