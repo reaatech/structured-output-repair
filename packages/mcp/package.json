@@ -1,6 +1,6 @@
 {
   "name": "@reaatech/structured-repair-mcp",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "MCP server exposing structured-output-repair tools",
   "license": "MIT",
   "author": "Rick Somers <rick@reaatech.com> (https://reaatech.com)",
@@ -27,7 +27,9 @@
   "bin": {
     "structured-repair": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },

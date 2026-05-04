@@ -1,6 +1,6 @@
 {
   "name": "@reaatech/structured-repair-core",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Repair malformed LLM structured outputs — core engine",
   "license": "MIT",
   "author": "Rick Somers <rick@reaatech.com> (https://reaatech.com)",
@@ -24,7 +24,9 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "publishConfig": {
     "access": "public"
   },
