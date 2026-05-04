@@ -1,434 +1,186 @@
 # Skill: CI/CD
 
-**Category**: DevOps  
-**Difficulty**: Intermediate  
+**Category**: DevOps
+**Difficulty**: Intermediate
 **Estimated Time**: 1-2 hours
 
 ## Overview
 
-This skill covers setting up Continuous Integration and Continuous Deployment pipelines for structured-output-repair using GitHub Actions. It includes automated testing, linting, building, and npm publishing.
+This skill covers the CI/CD pipeline for the structured-output-repair monorepo using GitHub Actions, Turborepo, and Changesets. It includes automated testing across Node.js versions, multi-job CI with artifact caching, and automated npm publishing with provenance.
 
 ## Capabilities
 
 An AI agent with this skill can:
 
-1. **Create GitHub Actions Workflows**
-   - Set up CI workflow for automated testing on PRs
-   - Configure build and test matrix for multiple Node.js versions
-   - Add linting and type checking steps
-   - Generate and upload coverage reports
+1. **Understand the CI Workflow** (`.github/workflows/ci.yml`)
+   - Multi-job pipeline: install → (audit, format, lint, typecheck) → build → (test [matrix 20/22], coverage) → all-checks
+   - Artifact passing between jobs via `actions/cache@v4` and `actions/upload-artifact@v4`
+   - Concurrency with `cancel-in-progress: true`
+   - Coverage summary posted to GitHub step summary
 
-2. **Configure Automated Publishing**
-   - Set up npm publishing workflow
-   - Configure version bumping and changelog generation
-   - Add GitHub Releases creation
-   - Implement semantic versioning
+2. **Understand the Release Workflow** (`.github/workflows/release.yml`)
+   - Triggered on push to `main` and `workflow_dispatch`
+   - Uses `changesets/action@v1` for automated versioning
+   - Publishes to npm with provenance (`NPM_CONFIG_PROVENANCE: 'true'`)
+   - Mirrors published packages to GitHub Packages
+   - Concurrency with `cancel-in-progress: false`
 
-3. **Implement Quality Gates**
-   - Require passing tests before merge
-   - Enforce minimum test coverage
-   - Add branch protection rules
-   - Configure required status checks
+3. **Configure Dependabot** (`.github/dependabot.yml`)
+   - Weekly updates on Monday 09:00 America/Chicago
+   - Groups: `production-deps` and `development-deps`
+   - `rebase-strategy: auto`, `open-pull-requests-limit: 10`
 
-4. **Set Up Monitoring**
-   - Configure build notifications
-   - Add deployment status checks
-   - Set up issue templates
-   - Create release checklist
+4. **GitHub Repository Settings**
+   - `NPM_TOKEN` repository secret for npm publishing
+   - Actions permissions: "Read and write" + "Allow PR creation"
+   - Branch protection on `main` requiring CI checks
 
-5. **Security Best Practices**
-   - Configure npm token security
-   - Set up Dependabot for dependency updates
-   - Add security scanning
-   - Implement code signing
+5. **Versioning and Release Process**
+   - `pnpm changeset` → create changeset per PR
+   - `pnpm version-packages` → bump versions + generate CHANGELOGs (CI)
+   - `pnpm release` → `turbo run build && changeset publish` (CI)
 
 ## When to Use This Skill
 
-- Setting up CI/CD for a new project
-- Adding automated testing to existing project
-- Preparing for npm publication
-- Setting up release automation
-- Improving code quality processes
+- Setting up CI/CD for the first time
+- Adding a new CI job or step
+- Updating Node.js version matrix
+- Fixing a broken workflow
+- Preparing for the first npm publish
 
 ## Example Requests
 
 ```
-"Create GitHub Actions workflow for automated testing"
+"Update the CI workflow to add a new job"
 
-"Set up npm publishing with semantic versioning"
+"Fix the release workflow's mirror step for a new package"
 
-"Add code coverage reporting to CI pipeline"
+"Update Dependabot to include a new package ecosystem"
 
-"Configure branch protection rules for main branch"
-
-"Set up automated changelog generation"
+"Debug why the Version Packages PR isn't being created"
 ```
 
 ## Output Expectations
 
 After using this skill, the agent should deliver:
 
-- [ ] GitHub Actions workflows in .github/workflows/
-- [ ] Automated testing on every PR and push
-- [ ] npm publishing workflow for releases
-- [ ] Coverage reporting configured
-- [ ] Branch protection rules documented
-- [ ] Release process documented
-- [ ] All workflows tested and working
+- [ ] Updated workflow files in `.github/workflows/`
+- [ ] All workflows validated (syntax checks)
+- [ ] CI passes on PR
+- [ ] Release workflow generates Version Packages PR
+- [ ] `NPM_TOKEN` secret configured in GitHub
 
 ## Dependencies
 
 This skill requires:
-- Setup skill completed (project structure in place)
-- Implementation skill completed (tests to run)
-- GitHub repository initialized
+- GitHub repository with Actions enabled
 - npm account with publishing permissions
-- Access to DEV_PLAN.md for specifications
+- `@changesets/cli` and `@changesets/changelog-github` in root devDependencies
+- `.changeset/config.json` with `access: "public"`
 
-## GitHub Actions Workflows
-
-### CI Workflow
-
-```yaml
-# .github/workflows/ci.yml
-name: CI
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        node-version: [20.x, 22.x]
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
-          run_install: false
-      
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'pnpm'
-      
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      
-      - name: Run linter
-        run: pnpm lint
-      
-      - name: Type check
-        run: pnpm typecheck
-      
-      - name: Run tests
-        run: pnpm test
-      
-      - name: Build project
-        run: pnpm build
-      
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
-          verbose: true
-
-  check-format:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
-          run_install: false
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          cache: 'pnpm'
-      
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      
-      - name: Check formatting
-        run: pnpm format:check
-```
-
-### Publish Workflow
-
-```yaml
-# .github/workflows/publish.yml
-name: Publish
-
-on:
-  release:
-    types: [published]
-
-jobs:
-  publish:
-    runs-on: ubuntu-latest
-    
-    permissions:
-      contents: read
-      packages: write
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
-          run_install: false
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'pnpm'
-      
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      
-      - name: Build
-        run: pnpm build
-      
-      - name: Run tests
-        run: pnpm test
-      
-      - name: Publish to npm
-        run: pnpm publish --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-```
-
-### Release Workflow
-
-```yaml
-# .github/workflows/release.yml
-name: Release
-
-on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to release (e.g., 1.0.0)'
-        required: true
-        type: string
-
-jobs:
-  release:
-    runs-on: ubuntu-latest
-    
-    permissions:
-      contents: write
-      packages: write
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 9
-          run_install: false
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'pnpm'
-      
-      - name: Configure Git
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-      
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      
-      - name: Update version
-        run: npm version ${{ github.event.inputs.version }} --no-git-tag-version
-      
-      - name: Build and test
-        run: |
-          pnpm build
-          pnpm test
-      
-      - name: Create commit and tag
-        run: |
-          git add package.json
-          git commit -m "chore: release v${{ github.event.inputs.version }}"
-          git tag "v${{ github.event.inputs.version }}"
-          git push origin main --tags
-      
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: v${{ github.event.inputs.version }}
-          generate_release_notes: true
-```
-
-## Branch Protection Rules
-
-Configure these rules in GitHub repository settings:
+## CI Workflow Structure
 
 ```
-Branch: main
-
-Protection rules:
-- [x] Require a pull request before merging
-  - [x] Require approvals: 1
-  - [x] Dismiss stale pull request approvals when new commits are pushed
-- [x] Require status checks to pass before merging
-  - [x] CI (test job)
-  - [x] CI (check-format job)
-- [x] Require branches to be up to date before merging
-- [x] Require conversation resolution before merging
-- [x] Include administrators
+┌──────────┐
+│ install  │  pnpm install --frozen-lockfile, cache store
+└────┬─────┘
+     │
+     ├──────────────┬──────────────┬──────────────┐
+     ▼              ▼              ▼              ▼
+┌────────┐   ┌──────────┐  ┌──────────┐  ┌──────────┐
+│ audit  │   │  format  │  │   lint   │  │ typecheck │
+│(no dep)│   │(needs:   │  │(needs:   │  │(needs:    │
+│        │   │ install) │  │ install) │  │ install)  │
+└────────┘   └──────────┘  └──────────┘  └────┬─────┘
+                                              │
+                         ┌────────────────────┘
+                         ▼
+                   ┌──────────┐
+                   │  build   │  turbo run build, upload artifacts
+                   │(needs:   │
+                   │ lint,    │
+                   │ typecheck│
+                   └────┬─────┘
+                        │
+              ┌─────────┴─────────┐
+              ▼                   ▼
+        ┌──────────┐       ┌──────────┐
+        │   test   │       │ coverage │
+        │  (matrix │       │(needs:   │
+        │  20, 22) │       │  build)  │
+        │(needs:   │       │          │
+        │  build)  │       │summary → │
+        │          │       │step sum. │
+        └──────────┘       └──────────┘
+              │                   │
+              └─────────┬─────────┘
+                        ▼
+                 ┌──────────────┐
+                 │ all-checks   │  aggregator gate
+                 │(needs: all   │
+                 │ above)       │
+                 └──────────────┘
 ```
 
-## NPM Publishing Setup
+## Key Conventions
 
-### 1. Create npm Account
-- Sign up at [npmjs.com](https://www.npmjs.com/)
-- Verify email address
+### Action versions
+All actions pinned to `v4` (`actions/checkout@v4`, `pnpm/action-setup@v4`, `actions/setup-node@v4`, `actions/cache@v4`).
 
-### 2. Generate npm Token
-```bash
-npm login
-npm token create --read-only false
-```
+### Node.js versions
+Matrix tests on Node `[20, 22]`. Default env uses `NODE_VERSION: 22`.
 
-### 3. Add Token to GitHub Secrets
-- Go to repository Settings → Secrets and variables → Actions
-- Add new secret: `NPM_TOKEN` with your npm token
+### pnpm
+Uses `pnpm/action-setup@v4` which reads `packageManager` from root `package.json` (`pnpm@10.22.0`).
 
-### 4. Test Publishing
-```bash
-# Dry run (doesn't actually publish)
-npm publish --dry-run
+### Release flow
+1. PR with changeset merges to `main`
+2. Release workflow opens/updates a "Version Packages" PR
+3. Version Packages PR bumps versions + CHANGELOGs
+4. Merging Version Packages PR triggers publish to npm + GitHub Packages mirror
 
-# Actual publish (be careful!)
-npm publish --access public
-```
+### NPM Provenance
+Enabled via `NPM_CONFIG_PROVENANCE: 'true'` in the release workflow. Requires `id-token: write` permission and matching `repository.url` in each `package.json`.
 
-## Dependabot Configuration
+## First-Publish Bootstrap
 
-```yaml
-# .github/dependabot.yml
-version: 2
-updates:
-  # Enable version updates for npm
-  - package-ecosystem: "npm"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    open-pull-requests-limit: 10
-    versioning-strategy: increase
-    labels:
-      - "dependencies"
-      - "automated"
-    commit-message:
-      prefix: "chore(deps)"
-    
-  # Enable version updates for GitHub Actions
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-    labels:
-      - "dependencies"
-      - "automated"
-    commit-message:
-      prefix: "chore(deps)"
-```
-
-## Security Scanning
-
-```yaml
-# .github/workflows/security.yml
-name: Security
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-  schedule:
-    - cron: '0 0 * * 0'  # Weekly
-
-jobs:
-  security:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Run pnpm audit
-        run: pnpm audit --audit-level high
-```
+The first publish to npm must be done manually from a local machine. CI cannot create the first version of a brand-new package scope.
 
 ## Best Practices
 
-1. **Fail Fast** - Run quick checks (lint, format) before slow tests
-2. **Cache Dependencies** - Use pnpm cache to speed up builds
-3. **Test Multiple Versions** - Test on multiple Node.js versions
-4. **Secure Secrets** - Never expose npm tokens in logs
-5. **Semantic Versioning** - Follow semver for releases
-6. **Automated Testing** - Run tests on every PR
-7. **Coverage Requirements** - Maintain minimum coverage thresholds
+1. **Fail Fast** — Run quick checks (format, lint) before slow tests (build, test)
+2. **Cache Aggressively** — Cache pnpm store and node_modules between jobs
+3. **Concurrency Control** — CI cancels in-progress runs on new pushes; release does not
+4. **Matrix Testing** — Test on oldest supported LTS (20) and current (22)
+5. **Aggregator Gate** — `all-checks` job acts as a single required status check
+6. **Provenance** — Always publish with npm provenance for supply chain trust
 
-## Common Issues
+## Troubleshooting
 
-### Issue: npm publish fails with "already exists"
-- **Solution**: Bump version number, unpublish old version (if within 24 hours)
+### Issue: CI can't find pnpm
+- **Solution**: Verify `pnpm/action-setup@v4` is before `setup-node` with `cache: 'pnpm'`
 
-### Issue: GitHub Actions can't find pnpm
-- **Solution**: Use pnpm/action-setup before setup-node, or install pnpm globally
+### Issue: Version Packages PR not created
+- **Solution**: Check Actions permissions: "Read and write" + "Allow PR creation"
 
-### Issue: Tests pass locally but fail in CI
-- **Solution**: Check for environment-specific code, ensure deterministic tests
+### Issue: npm publish fails with 404
+- **Solution**: First publish must be done manually
 
-### Issue: Coverage upload fails
-- **Solution**: Verify coverage file path, check Codecov token if using private repo
+### Issue: Provenance verification fails
+- **Solution**: Ensure `id-token: write` permission and `repository.url` in package.json matches
+
+### Issue: Turbo cache not hitting
+- **Solution**: Verify `turbo.json` task definitions and that cache keys are stable
 
 ## Resources
 
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [pnpm GitHub Action](https://github.com/pnpm/action-setup)
-- [npm Publishing Guide](https://docs.npmjs.com/packages-and-modules/contributing-packages-to-the-registry/publishing-packages)
-- [Semantic Versioning](https://semver.org/)
-- [DEV_PLAN.md](../DEV_PLAN.md) - Project specifications
+- [Changesets GitHub Action](https://github.com/changesets/action)
+- [npm Provenance](https://docs.npmjs.com/generating-provenance-statements)
+- [Turborepo CI Guide](https://turbo.build/repo/docs/ci)
 
 ## Related Skills
 
-- [`setup.md`](./setup.md) - Project initialization
-- [`testing.md`](./testing.md) - Writing tests for CI
-- [`mcp.md`](./mcp.md) - MCP tool publishing
+- [`setup.md`](./setup.md) — Project initialization
+- [`testing.md`](./testing.md) — Tests that run in CI
+- [`mcp.md`](./mcp.md) — MCP binary publishing

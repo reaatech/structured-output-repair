@@ -1,56 +1,52 @@
 # Skill: Documentation
 
-**Category**: Technical Writing  
-**Difficulty**: Intermediate  
+**Category**: Technical Writing
+**Difficulty**: Intermediate
 **Estimated Time**: 1-3 hours per document
 
 ## Overview
 
-This skill covers creating and maintaining comprehensive documentation for the structured-output-repair library, including README, API documentation, usage examples, and inline code comments.
+This skill covers creating and maintaining comprehensive documentation for the structured-output-repair monorepo, including per-package READMEs, root README, architecture docs, and inline code comments.
 
 ## Capabilities
 
 An AI agent with this skill can:
 
-1. **Write README Documentation**
-   - Project overview and motivation
-   - Installation instructions
-   - Quick start guide
-   - Comprehensive usage examples
-   - API reference summary
-   - Contributing guidelines
+1. **Write Package READMEs** (`packages/*/README.md`)
+   - Scoped package name as H1, badges (npm version, License, CI)
+   - Status blockquote, feature overview, installation
+   - Quick Start with runnable code examples
+   - API Reference with tables for options, return types, error classes
+   - Usage Patterns section with multiple examples
+   - Related Packages section linking to other packages in the monorepo
 
-2. **Create API Documentation**
-   - JSDoc comments for all public APIs
-   - Type documentation with examples
-   - Parameter descriptions
-   - Return type documentation
-   - Error documentation
+2. **Write Root README**
+   - Project name, badges (CI, License, TypeScript)
+   - Elevator pitch, features list
+   - Installation (packages + contributing)
+   - Quick Start, Packages table, Repair Strategies table
+   - Documentation links
 
-3. **Write Usage Examples**
-   - Basic usage scenarios
-   - Advanced configuration examples
-   - Integration examples (with popular frameworks)
-   - MCP tool usage examples
-   - Troubleshooting examples
+3. **Create Architecture Documentation** (`ARCHITECTURE.md`)
+   - Package boundary ASCII diagram
+   - Data flow diagrams for repair pipeline and MCP tool flow
+   - State machine diagram
+   - Technology choices table
+   - Extension points
 
 4. **Add Inline Documentation**
-   - Code comments explaining complex logic
-   - Function purpose and behavior documentation
-   - Algorithm explanations
-   - Performance considerations
+   - JSDoc comments for all public APIs
+   - Import patterns and module-level comments
+   - Biome-ignore comments with rationale for intentional rule violations
 
 5. **Create Additional Documentation**
-   - Migration guides
-   - Changelog entries
-   - Architecture documentation
-   - Contributing guide
-   - Code of conduct
+   - `CONTRIBUTING.md` — Contribution guidelines
+   - `AGENTS.md` — AI agent development guide
 
 ## When to Use This Skill
 
 - After implementing new features
-- When creating a new project
+- When creating a new package in the monorepo
 - Before releasing a new version
 - When updating existing documentation
 - When adding new examples or tutorials
@@ -58,7 +54,7 @@ An AI agent with this skill can:
 ## Example Requests
 
 ```
-"Write a comprehensive README for structured-output-repair"
+"Write a comprehensive README for @reaatech/structured-repair-core"
 
 "Add JSDoc comments to the repair() function with examples"
 
@@ -66,20 +62,19 @@ An AI agent with this skill can:
 
 "Document the MCP tool setup and configuration"
 
-"Write a migration guide from v1 to v2"
+"Update the root README with the current package list"
 ```
 
 ## Output Expectations
 
 After using this skill, the agent should deliver:
 
-- [ ] Clear, concise documentation following project standards
+- [ ] READMEs following the exact format used by `a2a-reference-ts` packages
 - [ ] All public APIs documented with JSDoc
 - [ ] Working code examples that can be copy-pasted
 - [ ] Proper markdown formatting
-- [ ] Links to related resources
-- [ ] Consistent terminology and style
-- [ ] Spell-checked and grammar-checked content
+- [ ] Consistent terminology across all docs
+- [ ] Links to related resources and packages
 
 ## Dependencies
 
@@ -87,248 +82,106 @@ This skill requires:
 - Implementation skill completed (code to document)
 - Understanding of the project's purpose and audience
 - Knowledge of markdown formatting
-- Access to DEV_PLAN.md for specifications
 - Familiarity with JSDoc syntax
 
-## Documentation Standards
+## README Format (per A2A convention)
 
-### README Structure
+Every package README follows this exact structure:
 
 ```markdown
-# structured-output-repair
+# @reaatech/structured-repair-<name>
 
-[![npm version](https://badge.fury.io/js/structured-output-repair.svg)](https://badge.fury.io/js/structured-output-repair)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![npm version](https://img.shields.io/npm/v/@reaatech/structured-repair-<name>.svg)](...)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](...)
+[![CI](https://img.shields.io/github/actions/workflow/status/reaatech/structured-output-repair/ci.yml?branch=main&label=CI)](...)
 
-## Overview
+> **Status:** Pre-1.0 — APIs may change in minor versions. Pin to a specific version in production.
 
-Brief description of what the library does and why it's useful.
+One-line description of the package.
 
 ## Installation
 
 ```bash
-npm install structured-output-repair zod
-# or
-pnpm add structured-output-repair zod
+npm install @reaatech/structured-repair-<name>
+pnpm add @reaatech/structured-repair-<name>
 ```
+
+## Feature Overview
+
+- **Feature 1** — Description
+- **Feature 2** — Description
 
 ## Quick Start
 
 ```typescript
-import { z } from 'zod';
-import { repair } from 'structured-output-repair';
-
-const schema = z.object({
-  name: z.string(),
-  age: z.number()
-});
-
-const llmOutput = '```json\n{ "name": "John", "age": "30" }\n```';
-const result = await repair(schema, llmOutput);
-// { name: "John", age: 30 }
+// Runnable code example
 ```
 
-## Table of Contents
-- [Features](#features)
-- [Usage](#usage)
-- [API Reference](#api-reference)
-- [MCP Tool](#mcp-tool)
-- [Contributing](#contributing)
-- [License](#license)
-```
+## API Reference
 
-### JSDoc Standards
+### `functionName()`
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+
+## Usage Patterns
+
+### Pattern Name
 
 ```typescript
-/**
- * Attempts to repair malformed LLM output against a Zod schema.
- * 
- * This function applies a graduated repair pipeline:
- * 1. Strip markdown fences
- * 2. Fix JSON syntax errors
- * 3. Coerce types via Zod
- * 4. Remove extra fields
- * 5. Relax schema as last resort
- * 
- * @example
- * ```typescript
- * import { z } from 'zod';
- * import { repair } from 'structured-output-repair';
- * 
- * const schema = z.object({ name: z.string(), age: z.number() });
- * const result = await repair(schema, '```json\n{ "name": "John", "age": "30" }\n```');
- * // result: { name: "John", age: 30 }
- * ```
- * 
- * @param schema - The Zod schema to validate against
- * @param input - The raw LLM output to repair
- * @returns The parsed and validated data
- * @throws {UnrepairableError} If the input cannot be repaired
- */
-export async function repair<T extends z.ZodType>(
-  schema: T,
-  input: string
-): Promise<z.infer<T>>;
+// Example
 ```
 
-### Code Comment Standards
+## Related Packages
 
-```typescript
-// Good: Explains WHY, not just WHAT
-// Use regex to match markdown fences with optional language identifier
-// This handles ```json, ```javascript, ```JSON, etc.
-const fencePattern = /^```(?:json|javascript|typescript|js|ts)?\s*\n?/i;
+- [`@reaatech/structured-repair-<other>`](https://www.npmjs.com/package/...) — Description
 
-// Good: Explains complex logic
-// We need to handle nested braces carefully to avoid breaking
-// on braces inside strings. Track whether we're inside a string
-// and only count braces outside of strings.
-let inString = false;
-let escapeNext = false;
-let braceCount = 0;
+## License
 
-// Bad: States the obvious
-// Increment counter
-i++;
+[MIT](...)
 ```
 
 ## Documentation Best Practices
 
-1. **Write for Your Audience** - Assume developers familiar with TypeScript but new to this library
-2. **Show, Don't Just Tell** - Use examples to demonstrate concepts
-3. **Be Concise** - Get to the point quickly, avoid unnecessary words
-4. **Use Consistent Terminology** - Pick terms and stick with them
-5. **Keep It Updated** - Documentation should match the current code
-6. **Include Error Handling** - Show how to handle common errors
-7. **Link to Resources** - Reference related documentation and tools
+1. **Match A2A Convention** — Use the exact same sections, badge format, and table style
+2. **Show, Don't Just Tell** — Runnable code examples for every exported function
+3. **Be Concise** — Get to the point quickly
+4. **Tables for Reference** — Use tables for options, return types, and error classes
+5. **Keep It Updated** — READMEs should match the current code
+6. **Cross-Reference** — Link to related packages, docs, and resources
 
-## Documentation Types
+## Documentation Checklist
 
-### 1. Conceptual Documentation
-Explains what the library does and why it's useful.
+Before finalizing any README:
 
-```markdown
-## Why structured-output-repair?
+- [ ] Badges functional (npm version, license, CI status)
+- [ ] All npm install commands correct (scoped package names)
+- [ ] Quick Start example compiles and runs
+- [ ] API Reference covers all public exports
+- [ ] Options/return types match the actual TypeScript types
+- [ ] Related Packages section links to sibling packages
+- [ ] LICENSE link resolves correctly
 
-When working with LLMs, you often request structured JSON output, but the model might return:
-- JSON wrapped in markdown code fences
-- JSON with syntax errors (trailing commas, missing quotes)
-- JSON with type mismatches (strings instead of numbers)
-- JSON with extra fields not in your schema
-
-This library automatically repairs these issues so your application doesn't crash.
-```
-
-### 2. Tutorial Documentation
-Step-by-step guide for getting started.
-
-```markdown
-## Tutorial: Repairing LLM Output
-
-1. Install the library:
-   ```bash
-   pnpm add structured-output-repair zod
-   ```
-
-2. Define your expected output schema:
-   ```typescript
-   import { z } from 'zod';
-   
-   const userSchema = z.object({
-     name: z.string(),
-     email: z.string().email(),
-     age: z.number().min(0)
-   });
-   ```
-
-3. Repair the LLM output:
-   ```typescript
-   import { repair } from 'structured-output-repair';
-   
-   const llmOutput = await callLLM();
-   const userData = await repair(userSchema, llmOutput);
-   ```
-```
-
-### 3. Reference Documentation
-Detailed API reference.
-
-```markdown
-## API Reference
-
-### repair(schema, input)
-
-Attempts to repair malformed LLM output against a Zod schema.
-
-**Parameters:**
-- `schema: z.ZodType` - The Zod schema to validate against
-- `input: string` - The raw LLM output to repair
-
-**Returns:** `Promise<z.infer<T>>` - The parsed and validated data
-
-**Throws:**
-- `UnrepairableError` - If the input cannot be repaired
-- `SchemaMismatchError` - If the repaired data doesn't match the schema
-
-**Example:**
-```typescript
-const result = await repair(schema, '```json\n{ "name": "John" }\n```');
-```
-```
-
-### 4. Troubleshooting Documentation
-Helps users solve common problems.
-
-```markdown
 ## Troubleshooting
 
-### "Input cannot be repaired" error
+### Issue: npm badge shows incorrect version
+- **Solution**: Verify the badge URL uses the exact npm package name
 
-This error occurs when the input is too malformed to fix automatically.
+### Issue: Code examples out of date with API
+- **Solution**: Cross-reference JSDoc types in the source; update examples to match
 
-**Solutions:**
-1. Check that the input contains some JSON-like structure
-2. Try using `analyzeInput()` to see what issues were detected
-3. Consider relaxing your schema or using `repairOutput()` with custom strategies
-
-### Performance issues with large inputs
-
-For inputs over 10KB, consider:
-1. Using the `strategies` option to skip unnecessary repair steps
-2. Pre-processing the input to remove known issues
-3. Breaking large outputs into smaller chunks
-```
-
-## Tools and Resources
-
-- **Typedoc** - Generate API documentation from TypeScript
-- **Markdown Lint** - Check markdown formatting
-- **Prettier** - Format documentation files
-- **GitHub Pages** - Host documentation site
-
-## Common Documentation Issues
-
-### Issue: Examples don't work
-- **Solution**: Test all code examples, include necessary imports
-
-### Issue: Documentation is outdated
-- **Solution**: Update docs as part of every PR, add documentation checklist
-
-### Issue: Missing important information
-- **Solution**: Gather feedback from users, add FAQ section
-
-### Issue: Hard to find information
-- **Solution**: Improve navigation, add search functionality, create index
+### Issue: Missing sections compared to sibling packages
+- **Solution**: Use the template above; compare against `packages/core/README.md` as the reference
 
 ## Resources
 
+- [a2a-reference-ts READMEs](https://github.com/reaatech/a2a-reference-ts/tree/main/packages) — Reference implementation
 - [JSDoc Documentation](https://jsdoc.app/)
 - [Markdown Guide](https://www.markdownguide.org/)
-- [Documentation Best Practices](https://documentation.divio.com/)
-- [DEV_PLAN.md](../DEV_PLAN.md) - Project specifications
+- [Shields.io](https://shields.io/) — Badge generation
 
 ## Related Skills
 
-- [`implementation.md`](./implementation.md) - Core library implementation
-- [`testing.md`](./testing.md) - Writing tests
-- [`mcp.md`](./mcp.md) - MCP tool documentation
+- [`implementation.md`](./implementation.md) — Core library implementation
+- [`mcp.md`](./mcp.md) — MCP tool documentation
+- [`testing.md`](./testing.md) — Test documentation within test files

@@ -4,11 +4,97 @@ Welcome to **structured-output-repair**! This document provides guidance for AI 
 
 ## Project Overview
 
+This is a **pnpm workspace monorepo** managed with Turborepo.
+
 **structured-output-repair** is a TypeScript library that catches malformed LLM structured outputs and fixes them instead of crashing. It ships as both an npm library and an MCP tool (`structured.repair`).
 
 - **GitHub**: [reaatech/structured-output-repair](https://github.com/reaatech/structured-output-repair)
 - **License**: MIT
-- **Tech Stack**: TypeScript, pnpm, Zod, tsup, Vitest, MCP SDK
+- **Tech Stack**: TypeScript, pnpm, Zod, tsup, Vitest, Biome, Turbo, Changesets, MCP SDK
+
+## Project Structure
+
+```
+packages/
+  core/         — Repair engine, all 4 strategies, types, errors, logger
+  mcp/          — MCP server tool (depends on core)
+```
+
+### Core Package (`packages/core/`)
+
+```
+packages/core/src/
+  index.ts                          — Public API barrel (repair, repairOutput, isValid, analyzeInput)
+  repair/
+    index.ts                        — Pipeline orchestrator + strategy registry
+    types.ts                        — RepairOptions<T>, RepairResult<T>, RepairStep, RepairStrategyName
+    strip-fences.ts                 — Strategy 1: markdown fence removal
+    fix-json.ts                     — Strategy 2: JSON syntax repair
+    coerce-types.ts                 — Strategy 3: Zod type coercion (walks Zod internals)
+    remove-extra-fields.ts          — Strategy 4: hallucinated field removal (recursive)
+  types/index.ts                    — Type re-exports
+  utils/
+    errors.ts                       — StructuredRepairError, UnrepairableError, etc.
+    logger.ts                       — Debug logger (writes to stderr)
+```
+
+### MCP Package (`packages/mcp/`)
+
+```
+packages/mcp/src/
+  index.ts          — Binary entry (#!/usr/bin/env node)
+  server.ts         — MCP server, structured.repair + structured.analyze tools
+  utils.ts          — JSON Schema → Zod converter
+```
+
+## Build System
+
+- **Package manager:** pnpm (required)
+- **Build tool:** tsup (per-package) + Turborepo (orchestration)
+- **Format/Lint:** Biome (not Prettier/ESLint)
+- **Test:** Vitest
+- **Release:** Changesets
+- **TypeScript:** Strict mode, ESM + CJS dual output
+
+### Common Commands
+
+```bash
+# Install all dependencies
+pnpm install
+
+# Build everything
+pnpm build
+
+# Run all tests
+pnpm test
+
+# Lint & format
+pnpm lint
+pnpm lint:fix
+pnpm format
+
+# Type-check without emit
+pnpm typecheck
+```
+
+## Coding Conventions
+
+1. **Runtime validation:** Use Zod for all external-facing data. Never trust raw JSON from LLMs.
+2. **Logging:** Use `createLogger()` from `packages/core/src/utils/logger.ts`. Never `console.log` in library code — use `console.error` only for MCP binary lifecycle messages.
+3. **Error handling:** Use typed `StructuredRepairError` subclasses from `packages/core/src/utils/errors.ts`. Include error codes.
+4. **Types:** Prefer `type` over `interface` for data shapes. Keep `interface` for class contracts.
+5. **No `any`:** Biome is configured to error on `any`. Use `unknown` + narrowing instead. For unavoidable Zod internal access (`_def.shape`, `_def.options`), use `// biome-ignore lint/suspicious/noExplicitAny: accessing Zod internals`.
+6. **Exports:** Always provide ESM + CJS dual output with `types` condition first in `exports`.
+7. **Tests:** Colocated as `src/*.test.ts`. Import vitest explictly (`import { describe, it, expect } from 'vitest'`). No globals.
+8. **Imports:** Within a package, use relative `.js` extension imports. Cross-package imports use the scoped package name (`@reaatech/structured-repair-core`).
+
+### How to format / lint
+
+```bash
+pnpm format      # biome format --write .
+pnpm lint        # biome check .
+pnpm lint:fix    # biome check --write .
+```
 
 ## How AI Agents Can Help
 
@@ -21,16 +107,16 @@ AI agents can assist with various aspects of development. See the `skills/` dire
 | [`skills/testing.md`](./skills/testing.md) | Unit tests, integration tests, test coverage, edge cases |
 | [`skills/documentation.md`](./skills/documentation.md) | README, API docs, examples, inline comments |
 | [`skills/mcp.md`](./skills/mcp.md) | MCP server implementation, tool definitions, binary setup |
-| [`skills/ci-cd.md`](./skills/ci-cd.md) | GitHub Actions, automated testing, npm publishing |
+| [`skills/ci-cd.md`](./skills/ci-cd.md) | GitHub Actions, automated testing, Changesets publishing |
 
 ## Agent Guidelines
 
 ### 1. Code Quality Standards
 
 - **TypeScript**: Strict mode enabled, no `any` types in public API
-- **Formatting**: Prettier with project defaults
-- **Linting**: ESLint with TypeScript support
-- **Testing**: 90%+ coverage required
+- **Formatting**: Biome with project defaults (single quotes, trailing commas, 2-space indent)
+- **Linting**: Biome with recommended rules, `noExplicitAny: error`, `noNonNullAssertion: error`
+- **Testing**: Unit tests colocated as `src/*.test.ts`. Coverage thresholds enforced.
 - **Documentation**: All public APIs must have JSDoc comments
 
 ### 2. Development Workflow
@@ -39,23 +125,20 @@ AI agents can assist with various aspects of development. See the `skills/` dire
 # Install dependencies
 pnpm install
 
-# Development mode
-pnpm run dev
-
 # Run tests
-pnpm run test
+pnpm test
 
 # Build for production
-pnpm run build
+pnpm build
 
 # Type checking
-pnpm run typecheck
+pnpm typecheck
 
 # Linting
-pnpm run lint
+pnpm lint
 
 # Formatting
-pnpm run format
+pnpm format
 ```
 
 ### 3. Git Workflow
@@ -74,6 +157,12 @@ pnpm run format
 - [ ] New features have tests
 - [ ] Documentation is updated
 
+## Adding a New Package
+
+1. Create `packages/<name>/` with `package.json`, `tsconfig.json`, `src/index.ts`
+2. Use `@reaatech/structured-repair-core` for shared types. Do not duplicate schemas.
+3. Run `pnpm install` to link workspace dependencies
+
 ## Requesting Agent Assistance
 
 When requesting help from an AI agent, please:
@@ -83,39 +172,10 @@ When requesting help from an AI agent, please:
 3. **Provide context** about the current state
 4. **Specify constraints** or requirements
 
-### Example Requests
-
-```
-"Please implement the strip-fences repair strategy following the specs in DEV_PLAN.md"
-
-"Add unit tests for the fix-json module with 90%+ coverage"
-
-"Update the README with installation and usage examples"
-
-"Set up GitHub Actions for CI/CD with test and publish workflows"
-```
-
-## Project Structure Reference
-
-```
-structured-output-repair/
-├── src/
-│   ├── index.ts                    # Main entry point
-│   ├── repair/                     # Repair strategies
-│   ├── mcp/                        # MCP server
-│   ├── utils/                      # Utilities
-│   └── types/                      # Type definitions
-├── test/                           # Test files
-├── skills/                         # Agent skill definitions
-├── DEV_PLAN.md                     # Detailed implementation plan
-├── AGENTS.md                       # This file
-├── package.json
-└── [config files]
-```
-
 ## Key Resources
 
 - [DEV_PLAN.md](./DEV_PLAN.md) — Complete implementation specification
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — System-level design and data flow
 - [skills/](./skills/) — Agent skill definitions
 - [Zod Documentation](https://zod.dev/) — Schema validation library
 - [MCP SDK Docs](https://github.com/modelcontextprotocol/typescript-sdk) — MCP implementation

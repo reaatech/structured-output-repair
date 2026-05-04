@@ -1,12 +1,12 @@
 # Skill: Testing
 
-**Category**: Quality Assurance  
-**Difficulty**: Intermediate  
+**Category**: Quality Assurance
+**Difficulty**: Intermediate
 **Estimated Time**: 1-2 hours per module
 
 ## Overview
 
-This skill covers writing comprehensive unit tests, integration tests, and end-to-end tests for the structured-output-repair library. It includes test setup, coverage requirements, and testing best practices.
+This skill covers writing comprehensive unit tests, integration tests, and benchmarks for the structured-output-repair monorepo. Tests are colocated with source files and run via Vitest with `globals: false`.
 
 ## Capabilities
 
@@ -16,31 +16,24 @@ An AI agent with this skill can:
    - Test individual repair strategies in isolation
    - Mock Zod schemas for testing
    - Test error handling and edge cases
-   - Achieve 90%+ code coverage per module
+   - Colocate tests as `src/repair/<name>.test.ts`
 
 2. **Write Integration Tests**
-   - Test the full repair pipeline
-   - Test strategy chaining and fallback
-   - Test with real-world LLM output samples
-   - Test MCP tool integration
+   - Test the full repair pipeline end-to-end
+   - Test with real-world LLM output scenarios
+   - Test MCP tool integration via InMemoryTransport
 
-3. **Create Test Fixtures**
-   - Build sample LLM outputs with various issues
-   - Create Zod schema test fixtures
-   - Build expected output comparisons
-
-4. **Performance Testing**
-   - Benchmark repair operations
+3. **Write Benchmarks**
+   - Performance benchmarks for repair operations
    - Test with large inputs
-   - Measure memory usage
-   - Validate performance targets (< 100ms for typical inputs)
+   - Validate performance targets
 
-5. **Edge Case Testing**
+4. **Edge Case Testing**
    - Malformed JSON variations
    - Nested structure edge cases
    - Unicode and special characters
    - Empty and null values
-   - Extremely large inputs
+   - All Zod schema types in `coerce-types` and `remove-extra-fields`
 
 ## When to Use This Skill
 
@@ -53,225 +46,217 @@ An AI agent with this skill can:
 ## Example Requests
 
 ```
-"Write unit tests for the strip-fences strategy with 90%+ coverage"
+"Write unit tests for the strip-fences strategy"
 
 "Create integration tests for the full repair pipeline"
 
-"Add edge case tests for nested object repair"
+"Add edge case tests for ZodDiscriminatedUnion in coerce-types"
 
 "Write performance benchmarks for the fix-json strategy"
-
-"Create test fixtures for common LLM output issues"
 ```
 
 ## Output Expectations
 
 After using this skill, the agent should deliver:
 
-- [x] Unit tests for all public functions
-- [x] Integration tests for pipeline flow
-- [x] Edge case tests for error handling
-- [ ] Test fixtures in test/fixtures/
-- [x] 90%+ code coverage for modified modules
+- [x] Unit tests colocated as `src/*.test.ts`
+- [x] Integration tests in `src/integration/`
+- [x] Benchmarks in `src/bench/`
 - [x] All tests passing (`pnpm test`)
-- [x] Performance benchmarks meeting targets
+- [x] No type errors (`pnpm typecheck`)
 
 ## Dependencies
 
 This skill requires:
-- Setup skill completed (Vitest configured)
+- Setup skill completed (vitest configured)
 - Implementation skill completed (code to test)
-- Understanding of Vitest testing framework
-- Knowledge of Zod schema validation
-- Access to DEV_PLAN.md for test specifications
+- Understanding of Vitest with `globals: false`
 
 ## Test Structure
 
-### Unit Tests
+Tests are **colocated** with source files, not in a separate `test/` directory:
+
+```
+packages/core/src/
+├── index.ts
+├── public-api.test.ts              # Tests the public API barrel
+├── repair/
+│   ├── index.ts
+│   ├── repair.test.ts              # Tests the repair pipeline
+│   ├── strip-fences.ts
+│   ├── strip-fences.test.ts        # Tests strip-fences strategy
+│   ├── fix-json.ts
+│   ├── fix-json.test.ts            # Tests fix-json strategy
+│   ├── coerce-types.ts
+│   ├── coerce-types.test.ts        # Basic coercion tests
+│   ├── coerce-types-advanced.test.ts  # Advanced Zod type tests
+│   ├── remove-extra-fields.ts
+│   ├── remove-extra-fields.test.ts    # Basic field removal tests
+│   └── remove-extra-fields-advanced.test.ts  # Advanced Zod type tests
+├── integration/
+│   └── full-repair.test.ts         # End-to-end repair pipeline tests
+├── bench/
+│   └── repair.bench.ts             # Performance benchmarks
+└── utils/
+    ├── logger.ts
+    └── logger.test.ts              # Tests the debug logger
+```
+
+```
+packages/mcp/src/
+├── index.ts
+├── server.ts
+├── server.test.ts                  # Tests MCP server tools
+├── utils.ts
+└── utils.test.ts                   # Tests JSON Schema → Zod conversion
+```
+
+## Vitest Configuration
+
+All tests use `globals: false` — explicit imports required:
 
 ```typescript
-// test/unit/strip-fences.test.ts
-import { describe, it, expect } from 'vitest';
-import { stripFences } from '../../src/repair/strip-fences';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { stripFences } from './strip-fences.js';
 
 describe('stripFences', () => {
   it('should remove json code fences', () => {
     const input = '```json\n{ "name": "test" }\n```';
-    const expected = '{ "name": "test" }';
-    expect(stripFences(input)).toBe(expected);
-  });
-
-  it('should handle uppercase JSON', () => {
-    const input = '```JSON\n{ "name": "test" }\n```';
     expect(stripFences(input)).toBe('{ "name": "test" }');
   });
-
-  // More tests...
 });
 ```
 
-### Integration Tests
+## Per-Package vitest.config.ts
 
 ```typescript
-// test/integration/full-repair.test.ts
-import { describe, it, expect } from 'vitest';
-import { z } from 'zod';
-import { repair } from '../../src/index';
+import { defineConfig } from 'vitest/config';
 
-describe('repair pipeline', () => {
-  const schema = z.object({
-    name: z.string(),
-    age: z.number(),
-    email: z.string().email().optional()
-  });
-
-  it('should handle multiple issues', async () => {
-    const input = '```json\n{ "name": \'John\', "age": "30", "extra": 1, }\n```';
-    const result = await repair(schema, input);
-    expect(result).toEqual({ name: 'John', age: 30 });
-  });
-
-  // More tests...
+export default defineConfig({
+  test: {
+    globals: false,
+    environment: 'node',
+    coverage: {
+      reporter: ['text', 'json-summary'],
+    },
+  },
 });
 ```
 
-### Test Fixtures
+## Import Patterns in Tests
 
-```json
-// test/fixtures/malformed-1.json
-{
-  "description": "JSON with trailing commas and single quotes",
-  "input": "{ 'name': 'John', 'age': 30, }",
-  "expected": { "name": "John", "age": 30 }
-}
-```
-
-## Coverage Requirements
-
-| Module | Minimum Coverage |
-|--------|-----------------|
-| strip-fences.ts | 95% |
-| fix-json.ts | 95% |
-| coerce-types.ts | 90% |
-| remove-extra-fields.ts | 90% |
-| repair/index.ts | 95% |
-| Public API | 100% |
-
-## Testing Best Practices
-
-1. **Test Isolation** - Each test should be independent
-2. **Descriptive Names** - Test names should describe the behavior
-3. **Arrange-Act-Assert** - Follow AAA pattern for test structure
-4. **Edge Cases First** - Test boundary conditions before happy paths
-5. **Mock External Dependencies** - Don't rely on external services
-6. **Test Errors** - Verify error handling, not just success paths
-7. **Keep Tests Fast** - Avoid slow operations in unit tests
+| Test location | Source being tested | Import path |
+|---------------|-------------------|-------------|
+| `src/repair/fix-json.test.ts` | `src/repair/fix-json.ts` | `'./fix-json.js'` |
+| `src/repair/repair.test.ts` | `src/repair/index.ts` | `'./index.js'` |
+| `src/repair/coerce-types.test.ts` | `src/utils/errors.ts` | `'../utils/errors.js'` |
+| `src/integration/full-repair.test.ts` | `src/repair/index.ts` | `'../repair/index.js'` |
+| `src/public-api.test.ts` | `src/index.ts` | `'./index.js'` |
+| `packages/mcp/src/server.test.ts` | `packages/mcp/src/server.ts` | `'./server.js'` |
 
 ## Test Categories
 
-### 1. Happy Path Tests
-Test the most common, expected usage patterns.
+### 1. Unit Tests (per strategy)
+
+Test each strategy function in isolation with a variety of inputs.
 
 ```typescript
-it('should repair valid JSON with minor issues', async () => {
-  const input = '{ "name": "John", "age": 30, }';
-  const result = await repair(schema, input);
+it('should handle unquoted object keys', () => {
+  expect(fixJsonSyntax('{ name: "test" }')).toBe('{ "name": "test" }');
+});
+```
+
+### 2. Integration Tests
+
+Test the full `repair()` pipeline with realistic multi-issue LLM output.
+
+```typescript
+it('should handle real-world LLM output', async () => {
+  const input = '```json\n{ name: \'John\', "age": "30", extra: 1 }\n```';
+  const result = await repair(strictSchema, input);
   expect(result).toEqual({ name: 'John', age: 30 });
 });
 ```
 
-### 2. Edge Case Tests
-Test unusual but valid inputs.
+### 3. Advanced Zod Type Tests
+
+Test strategies with all Zod schema types (`ZodUnion`, `ZodDiscriminatedUnion`, `ZodLazy`, `ZodMap`, `ZodSet`, etc.).
 
 ```typescript
-it('should handle empty objects', async () => {
-  const schema = z.object({});
-  const input = '{}';
-  const result = await repair(schema, input);
-  expect(result).toEqual({});
+it('should handle recursive schemas via ZodLazy', () => {
+  type Category = { name: string; subcategories: Category[] };
+  const categorySchema: z.ZodType<Category> = z.lazy(() =>
+    z.object({
+      name: z.string(),
+      subcategories: z.array(categorySchema),
+    })
+  );
+  const data = { name: 'Root', subcategories: [{ name: 'Child', subcategories: [], extra: true }] };
+  const result = removeExtraFields(categorySchema, data);
+  expect(result).toEqual({ name: 'Root', subcategories: [{ name: 'Child', subcategories: [] }] });
 });
 ```
 
-### 3. Error Handling Tests
-Test graceful failure for unrepairable input.
+### 4. Benchmarks
+
+Performance tests run via `vitest bench` (not part of `pnpm test`).
 
 ```typescript
-it('should throw UnrepairableError for completely invalid input', async () => {
-  const input = 'this is not json at all';
-  await expect(repair(schema, input)).rejects.toThrow(UnrepairableError);
-});
-```
+import { describe, bench } from 'vitest';
+import { repair } from '../repair/index.js';
 
-### 4. Performance Tests
-Test that operations complete within time limits.
-
-```typescript
-it('should repair large JSON within 100ms', async () => {
-  const largeInput = JSON.stringify({
-    items: Array.from({ length: 1000 }, (_, i) => ({ id: i, name: `Item ${i}` }))
+describe('repair performance', () => {
+  bench('small valid JSON', async () => {
+    await repair(schema, '{"name":"test","age":25}');
   });
-  const start = Date.now();
-  await repair(largeSchema, largeInput);
-  const duration = Date.now() - start;
-  expect(duration).toBeLessThan(100);
-});
-```
-
-### 5. Regression Tests
-Test previously fixed bugs to prevent recurrence.
-
-```typescript
-it('should not strip legitimate backslashes (regression #42)', async () => {
-  const input = '{ "path": "C:\\\\Users\\\\test" }';
-  const result = await repair(schema, input);
-  expect(result.path).toBe('C:\\Users\\test');
 });
 ```
 
 ## Running Tests
 
 ```bash
-# Run all tests
+# Run all tests across both packages
 pnpm test
 
-# Run tests in watch mode
-pnpm test:watch
-
-# Run tests with coverage report
+# Run tests with coverage
 pnpm test:coverage
 
-# Run specific test file
-pnpm test strip-fences
+# Run tests for a specific package
+pnpm --filter @reaatech/structured-repair-core test
 
-# Run tests matching pattern
-pnpm test -- --grep "repair"
+# Run benchmarks
+pnpm --filter @reaatech/structured-repair-core exec vitest bench --run
 ```
 
-## Debugging Tests
+## Best Practices
 
-### Common Issues
+1. **Test Isolation** — Each test should be independent, no shared mutable state
+2. **Descriptive Names** — Test names should describe the behavior being verified
+3. **Arrange-Act-Assert** — Follow AAA pattern for test structure
+4. **Explicit Imports** — Always import from `vitest`; no globals
+5. **Colocated Tests** — Tests live next to source: `src/foo.test.ts`
+6. **Test Errors** — Verify error handling, not just success paths
+7. **Keep Tests Fast** — Avoid external dependencies, network calls in unit tests
 
-**Issue**: Test passes locally but fails in CI
-- **Solution**: Check for environment-specific code, ensure tests are deterministic
+## Troubleshooting
 
-**Issue**: Tests are slow
-- **Solution**: Profile test execution, optimize setup/teardown, consider splitting large test suites
+### Issue: Test fails with "Cannot find module"
+- **Solution**: Check import path is relative to the current file with `.js` extension
 
-**Issue**: Flaky tests (intermittent failures)
-- **Solution**: Remove timing dependencies, mock external services, ensure test isolation
+### Issue: vi.spyOn / vi.fn not found
+- **Solution**: Verify `vi` is imported from vitest: `import { vi } from 'vitest'`
 
-**Issue**: Low coverage despite many tests
-- **Solution**: Add tests for error paths, edge cases, and conditional branches
+### Issue: Tests pass locally but fail in CI
+- **Solution**: Tests should be deterministic; avoid timing dependencies
 
 ## Resources
 
 - [Vitest Documentation](https://vitest.dev/)
-- [Testing Library Principles](https://testing-library.com/)
-- [Zod Testing Guide](https://zod.dev/?id=testing)
-- [DEV_PLAN.md Test Cases](../DEV_PLAN.md#test-cases)
+- [Vitest API Reference](https://vitest.dev/api/)
+- [DEV_PLAN.md](../DEV_PLAN.md) — Test case specifications
 
 ## Related Skills
 
-- [`implementation.md`](./implementation.md) - Core library implementation
-- [`ci-cd.md`](./ci-cd.md) - CI/CD pipeline with automated testing
-- [`setup.md`](./setup.md) - Test environment configuration
+- [`implementation.md`](./implementation.md) — Core library implementation
+- [`ci-cd.md`](./ci-cd.md) — CI/CD pipeline with automated testing
+- [`setup.md`](./setup.md) — Test environment configuration

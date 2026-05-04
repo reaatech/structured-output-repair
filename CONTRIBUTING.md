@@ -22,8 +22,8 @@ Please be respectful and constructive in your interactions. We are committed to 
 
 ### Prerequisites
 
-- Node.js 20+
-- pnpm 9+
+- Node.js 22 (pinned in `.nvmrc`)
+- pnpm 10.22+ (package manager)
 - Git
 
 ### Setup
@@ -38,9 +38,9 @@ Please be respectful and constructive in your interactions. We are committed to 
    ```bash
    pnpm install
    ```
-4. Start development mode:
+4. Build all packages:
    ```bash
-   pnpm run dev
+   pnpm build
    ```
 
 ### Verify Setup
@@ -56,8 +56,23 @@ pnpm typecheck
 pnpm lint
 
 # Check formatting
-pnpm format:check
+pnpm format
 ```
+
+## Project Structure
+
+This is a **pnpm workspace monorepo** with Turborepo:
+
+```
+packages/
+  core/         — Repair engine, all 4 strategies, types, errors
+  mcp/          — MCP server tool (depends on core)
+```
+
+- **Build:** `tsup` per-package, Turborepo orchestration
+- **Format/Lint:** Biome
+- **Test:** Vitest (unit tests colocated at `src/*.test.ts`)
+- **Release:** Changesets
 
 ## Development Workflow
 
@@ -116,7 +131,7 @@ Closes #42
 2. **Comment on the issue** - Let others know you're working on it
 3. **Create a branch** - From main, create your feature branch
 4. **Implement changes** - Follow coding standards
-5. **Write tests** - Ensure 90%+ coverage for new code
+5. **Write tests** - Unit tests colocated at `src/*.test.ts`
 6. **Update documentation** - Keep docs in sync with code
 7. **Submit a PR** - Follow the pull request template
 
@@ -131,12 +146,12 @@ Closes #42
 
 ### Code Style
 
-- Use Prettier for formatting
-- Use ESLint for linting
+- Use Biome for formatting and linting
 - 2-space indentation
 - Single quotes for strings
 - Semicolons required
 - Trailing commas in multiline objects
+- 100 character line width
 
 ### Documentation
 
@@ -144,34 +159,6 @@ Closes #42
 - Include `@example` tags with runnable code
 - Document parameters, return types, and errors
 - Keep inline comments focused on "why", not "what"
-
-### Example
-
-```typescript
-/**
- * Strips markdown code fences from input.
- * 
- * Handles various fence formats including:
- * - ```json, ```javascript, ```typescript
- * - Case-insensitive language identifiers
- * - Nested fences
- * 
- * @example
- * ```typescript
- * import { stripFences } from 'structured-output-repair';
- * 
- * const input = '```json\n{ "name": "test" }\n```';
- * const result = stripFences(input);
- * // result: '{ "name": "test" }'
- * ```
- * 
- * @param input - The raw string potentially containing markdown fences
- * @returns The input string with fences removed
- */
-export function stripFences(input: string): string {
-  // Implementation
-}
-```
 
 ## Testing
 
@@ -181,14 +168,11 @@ export function stripFences(input: string): string {
 # Run all tests
 pnpm test
 
-# Watch mode
-pnpm test:watch
-
 # With coverage
 pnpm test:coverage
 
-# Specific test file
-pnpm test strip-fences
+# Run tests for a specific package
+pnpm --filter @reaatech/structured-repair-core test
 ```
 
 ### Test Requirements
@@ -196,13 +180,15 @@ pnpm test strip-fences
 - **Unit tests** for all public functions
 - **Integration tests** for repair pipeline
 - **Edge case tests** for error handling
-- **90%+ code coverage** for new code
+- Coverage thresholds enforced
 
 ### Test Structure
 
+Tests are colocated with source files as `src/*.test.ts`:
+
 ```typescript
 import { describe, it, expect } from 'vitest';
-import { stripFences } from '../../src/repair/strip-fences';
+import { stripFences } from './strip-fences.js';
 
 describe('stripFences', () => {
   it('should remove json code fences', () => {
@@ -210,8 +196,6 @@ describe('stripFences', () => {
     const expected = '{ "name": "test" }';
     expect(stripFences(input)).toBe(expected);
   });
-
-  // More tests...
 });
 ```
 
@@ -235,79 +219,19 @@ describe('stripFences', () => {
 4. **Checklist** - Complete the PR checklist
 5. **Review** - Address review feedback
 
-### PR Template
+## Releasing
 
-```markdown
-## Description
+This project uses [Changesets](https://github.com/changesets/changesets) for versioning and publishing.
 
-Brief description of changes.
+```bash
+# Create a changeset
+pnpm changeset
 
-## Type of Change
+# Version packages (updates CHANGELOGs + package.json versions)
+pnpm version-packages
 
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Breaking change
-- [ ] Documentation update
-
-## Testing
-
-- [ ] Tests added/updated
-- [ ] All tests pass
-- [ ] Coverage meets requirements
-
-## Checklist
-
-- [ ] Code follows project style guidelines
-- [ ] Self-review completed
-- [ ] Comments added for complex code
-- [ ] Documentation updated
-- [ ] No new warnings
-- [ ] Tests added for new functionality
-```
-
-## Issue Templates
-
-### Bug Report
-
-```markdown
-**Describe the bug**
-Clear description of the bug.
-
-**To Reproduce**
-Steps to reproduce:
-1. 
-2. 
-3. 
-
-**Expected behavior**
-What you expected to happen.
-
-**Actual behavior**
-What actually happened.
-
-**Environment**
-- Node.js version: 
-- OS: 
-- Package version: 
-
-**Additional context**
-Any other context, logs, or screenshots.
-```
-
-### Feature Request
-
-```markdown
-**Is your feature request related to a problem?**
-Clear description of the problem.
-
-**Describe the solution you'd like**
-What you want to happen.
-
-**Describe alternatives you've considered**
-Other solutions you've thought about.
-
-**Additional context**
-Any other context, examples, or mockups.
+# Publish to npm
+pnpm release
 ```
 
 ## Resources
