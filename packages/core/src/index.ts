@@ -1,17 +1,17 @@
-export { repair, repairOutput, isValid, analyzeInput } from './repair/index.js';
+export { analyzeInput, isValid, repair, repairOutput } from './repair/index.js';
 export type {
+  InputAnalysis,
+  InputIssue,
+  RepairError,
+  RepairFailureContext,
   RepairOptions,
   RepairResult,
   RepairStep,
-  RepairError,
   RepairStrategyName,
-  RepairFailureContext,
-  InputAnalysis,
-  InputIssue,
 } from './repair/types.js';
 export {
+  JsonSyntaxError,
+  SchemaMismatchError,
   StructuredRepairError,
   UnrepairableError,
-  SchemaMismatchError,
-  JsonSyntaxError,
 } from './utils/errors.js';
