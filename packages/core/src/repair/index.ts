@@ -16,11 +16,11 @@ import type {
   RepairStrategyName,
 } from './types.js';
 
-export * from './types.js';
-export { stripFences } from './strip-fences.js';
-export { fixJsonSyntax } from './fix-json.js';
 export { coerceTypes, makeCoercedSchema } from './coerce-types.js';
+export { fixJsonSyntax } from './fix-json.js';
 export { removeExtraFields } from './remove-extra-fields.js';
+export { stripFences } from './strip-fences.js';
+export * from './types.js';
 
 const DEFAULT_STRATEGIES: RepairStrategyName[] = [
   'strip-fences',

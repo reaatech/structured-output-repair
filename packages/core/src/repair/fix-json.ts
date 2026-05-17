@@ -140,7 +140,7 @@ function quoteUnquotedKeys(input: string): string {
 
 function fixMissingCommas(input: string): string {
   let result = input;
-  result = result.replace(/([}\]"0-9]|true|false|null)\s+(["{\[])/g, '$1, $2');
+  result = result.replace(/([}\]"0-9]|true|false|null)\s+(["{[])/g, '$1, $2');
   result = result.replace(/([}\]"0-9]|true|false|null)\s+(true|false|null|-?\d)/g, '$1, $2');
 
   return result;
