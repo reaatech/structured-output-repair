@@ -45,7 +45,7 @@ describe('removeExtraFields advanced types', () => {
   it('should handle ZodRecord', () => {
     const schema = z
       .object({
-        meta: z.record(z.object({ val: z.number() }).strict()),
+        meta: z.record(z.string(), z.object({ val: z.number() }).strict()),
       })
       .strict();
     const data = { meta: { a: { val: 1, extra: 'x' }, b: { val: 2 } } };
@@ -125,8 +125,8 @@ describe('removeExtraFields advanced types', () => {
     expect(result).toEqual({ value: 1, children: [{ value: 2 }] });
   });
 
-  it('should pass through ZodEffects', () => {
-    // ZodEffects can't be inspected; data is returned as-is
+  it('should handle refined schemas', () => {
+    // In Zod v4, refine returns the same object, so extra fields are stripped
     const schema = z
       .object({
         val: z.number(),
@@ -135,7 +135,7 @@ describe('removeExtraFields advanced types', () => {
       .refine((data) => data.val > 0);
     const data = { val: 5, extra: 'x' };
     const result = removeExtraFields(schema, data);
-    expect(result).toEqual({ val: 5, extra: 'x' });
+    expect(result).toEqual({ val: 5 });
   });
 
   it('should handle ZodMap', () => {

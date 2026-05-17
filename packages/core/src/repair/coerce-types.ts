@@ -23,39 +23,38 @@ export function makeCoercedSchema(schema: z.ZodType): z.ZodType {
   if (schema instanceof z.ZodUndefined) return z.undefined();
   if (schema instanceof z.ZodVoid) return z.void();
   if (schema instanceof z.ZodLiteral) {
-    return z.literal(zodDef<{ value: z.Primitive }>(schema).value);
+    const litDef = zodDef<{ values: readonly unknown[] }>(schema);
+    return z.literal(litDef.values[0] as string | number | bigint | boolean | null | undefined);
   }
   if (schema instanceof z.ZodEnum) {
-    return z.enum(zodDef<{ values: readonly [string, ...string[]] }>(schema).values);
-  }
-  if (schema instanceof z.ZodNativeEnum) {
-    const values = zodDef<{
-      values: { [k: string]: string | number; [nu: number]: string };
-    }>(schema).values;
-    return z.nativeEnum(values);
+    return z.enum(schema.options as [string, ...string[]]);
   }
 
   // Wrappers
   if (schema instanceof z.ZodOptional) {
-    return makeCoercedSchema(schema.unwrap()).optional();
+    return makeCoercedSchema(schema.unwrap() as z.ZodType).optional();
   }
   if (schema instanceof z.ZodNullable) {
-    return makeCoercedSchema(schema.unwrap()).nullable();
+    return makeCoercedSchema(schema.unwrap() as z.ZodType).nullable();
   }
   if (schema instanceof z.ZodDefault) {
-    const inner = makeCoercedSchema(schema.removeDefault());
+    const inner = makeCoercedSchema(schema.unwrap() as z.ZodType);
     const raw = zodDef<{ defaultValue: unknown }>(schema).defaultValue;
     const defaultValue = typeof raw === 'function' ? (raw as () => unknown)() : raw;
-    return inner.default(defaultValue);
+    return inner.default(defaultValue as never);
   }
   if (schema instanceof z.ZodCatch) {
-    const inner = makeCoercedSchema(schema.removeCatch());
+    const inner = makeCoercedSchema(schema.unwrap() as z.ZodType);
     const catchFn = zodDef<{
       catchValue: (input: unknown) => unknown;
     }>(schema).catchValue;
     return inner.catch(catchFn);
   }
-  if (schema instanceof z.ZodEffects) {
+  if (
+    schema instanceof z.ZodPipe ||
+    schema instanceof z.ZodTransform ||
+    schema instanceof z.ZodPreprocess
+  ) {
     return schema;
   }
   if (schema instanceof z.ZodLazy) {
@@ -63,58 +62,69 @@ export function makeCoercedSchema(schema: z.ZodType): z.ZodType {
     return z.lazy(() => makeCoercedSchema(getter()));
   }
   if (schema instanceof z.ZodPromise) {
-    return z.promise(makeCoercedSchema(schema.unwrap()));
+    return z.promise(makeCoercedSchema(schema.unwrap() as z.ZodType));
   }
 
   // Collections
   if (schema instanceof z.ZodObject) {
-    const def = zodDef<{
-      shape: () => Record<string, z.ZodType>;
-      unknownKeys: string;
-    }>(schema);
-    const rawShape = def.shape();
+    const def = zodDef<{ catchall?: z.ZodType }>(schema);
     const newShape: Record<string, z.ZodType> = {};
-    for (const [key, value] of Object.entries(rawShape)) {
-      newShape[key] = makeCoercedSchema(value);
+    for (const [key, value] of Object.entries(schema.shape)) {
+      newShape[key] = makeCoercedSchema(value as z.ZodType);
     }
     const obj = z.object(newShape);
-    if (def.unknownKeys === 'strict') return obj.strict();
-    if (def.unknownKeys === 'passthrough') return obj.passthrough();
+    if (def.catchall) {
+      const catchallDef = zodDef<{ type: string }>(def.catchall);
+      if (catchallDef.type === 'never') return obj.strict();
+      if (catchallDef.type === 'unknown') return obj.passthrough();
+    }
     return obj;
   }
   if (schema instanceof z.ZodArray) {
-    return z.array(makeCoercedSchema(schema.element));
+    return z.array(makeCoercedSchema(schema.element as z.ZodType));
   }
   if (schema instanceof z.ZodRecord) {
-    return z.record(makeCoercedSchema(schema.valueSchema));
+    return z.record(z.string(), makeCoercedSchema((schema as z.ZodRecord).valueType as z.ZodType));
   }
   if (schema instanceof z.ZodMap) {
-    return z.map(makeCoercedSchema(schema.keySchema), makeCoercedSchema(schema.valueSchema));
+    return z.map(
+      makeCoercedSchema((schema as z.ZodMap).keyType as z.ZodType),
+      makeCoercedSchema((schema as z.ZodMap).valueType as z.ZodType),
+    );
   }
   if (schema instanceof z.ZodSet) {
-    return z.set(makeCoercedSchema(schema._def.valueType));
+    const setDef = zodDef<{ valueType: z.ZodType }>(schema);
+    return z.set(makeCoercedSchema(setDef.valueType));
   }
   if (schema instanceof z.ZodTuple) {
-    const def = zodDef<{ items: z.ZodType[]; rest: z.ZodType | null }>(schema);
-    const coercedItems = def.items.map(makeCoercedSchema);
-    if (def.rest) {
-      return z.tuple(coercedItems as [z.ZodType, ...z.ZodType[]]).rest(makeCoercedSchema(def.rest));
+    const tupleDef = zodDef<{ items: readonly z.ZodType[]; rest: z.ZodType | null }>(schema);
+    const coercedItems = tupleDef.items.map(makeCoercedSchema);
+    if (tupleDef.rest) {
+      return z
+        .tuple(coercedItems as [z.ZodType, ...z.ZodType[]])
+        .rest(makeCoercedSchema(tupleDef.rest));
     }
     return z.tuple(coercedItems as [z.ZodType, ...z.ZodType[]]);
   }
   if (schema instanceof z.ZodUnion) {
-    const options = zodDef<{ options: z.ZodType[] }>(schema).options;
-    return z.union(options.map(makeCoercedSchema) as [z.ZodType, z.ZodType, ...z.ZodType[]]);
+    const options = (schema as z.ZodUnion).options;
+    return z.union(
+      options.map((opt) => makeCoercedSchema(opt as z.ZodType)) as [
+        z.ZodType,
+        z.ZodType,
+        ...z.ZodType[],
+      ],
+    );
   }
   if (schema instanceof z.ZodDiscriminatedUnion) {
-    const options = zodDef<{ options: z.ZodType[] }>(schema).options;
-    const coercedOptions = options.map(makeCoercedSchema);
+    const options = (schema as z.ZodDiscriminatedUnion).options;
+    const coercedOptions = options.map((opt) => makeCoercedSchema(opt as z.ZodType));
     if (coercedOptions.length === 1) return coercedOptions[0];
     return z.union(coercedOptions as [z.ZodType, z.ZodType, ...z.ZodType[]]);
   }
   if (schema instanceof z.ZodIntersection) {
-    const { left, right } = zodDef<{ left: z.ZodType; right: z.ZodType }>(schema);
-    return z.intersection(makeCoercedSchema(left), makeCoercedSchema(right));
+    const def = zodDef<{ left: z.ZodType; right: z.ZodType }>(schema);
+    return z.intersection(makeCoercedSchema(def.left), makeCoercedSchema(def.right));
   }
 
   return schema;

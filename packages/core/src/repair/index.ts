@@ -221,7 +221,7 @@ export async function repair<T extends z.ZodType>(schema: T, input: string): Pro
   if (!result.success) {
     throw new UnrepairableError('Input could not be repaired', input, result.steps);
   }
-  return result.data;
+  return result.data as z.infer<T>;
 }
 
 /**

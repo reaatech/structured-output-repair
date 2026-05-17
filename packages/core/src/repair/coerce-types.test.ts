@@ -10,7 +10,7 @@ describe('makeCoercedSchema', () => {
     const result = coerced.safeParse({ age: '30' });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.age).toBe(30);
+      expect((result.data as Record<string, unknown>).age).toBe(30);
     }
   });
 
@@ -20,7 +20,7 @@ describe('makeCoercedSchema', () => {
     const result = coerced.safeParse({ active: 'true' });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.active).toBe(true);
+      expect((result.data as Record<string, unknown>).active).toBe(true);
     }
   });
 
@@ -37,7 +37,7 @@ describe('makeCoercedSchema', () => {
     const result = coerced.safeParse({});
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.count).toBe(0);
+      expect((result.data as Record<string, unknown>).count).toBe(0);
     }
   });
 
@@ -49,7 +49,9 @@ describe('makeCoercedSchema', () => {
     const result = coerced.safeParse({ user: { age: '25' } });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.user.age).toBe(25);
+      expect(((result.data as Record<string, unknown>).user as Record<string, unknown>).age).toBe(
+        25,
+      );
     }
   });
 
@@ -59,7 +61,7 @@ describe('makeCoercedSchema', () => {
     const result = coerced.safeParse({ items: ['1', '2', '3'] });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.items).toEqual([1, 2, 3]);
+      expect((result.data as Record<string, unknown>).items).toEqual([1, 2, 3]);
     }
   });
 

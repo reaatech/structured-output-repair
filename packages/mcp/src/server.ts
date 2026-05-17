@@ -97,7 +97,7 @@ export function createStructuredRepairServer(): Server {
 
 const repairArgsSchema = z.object({
   input: z.string(),
-  schema: z.record(z.unknown()),
+  schema: z.record(z.string(), z.unknown()),
   options: z
     .object({
       debug: z.boolean().optional(),
