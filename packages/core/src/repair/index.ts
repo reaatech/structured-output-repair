@@ -2,10 +2,13 @@ import type { z } from 'zod';
 import { UnrepairableError } from '../utils/errors.js';
 import { createLogger } from '../utils/logger.js';
 import { coerceTypes } from './coerce-types.js';
+import { extractJson } from './extract-json.js';
 import { fixJsonSyntax } from './fix-json.js';
+import { fuzzyMatchKeys } from './fuzzy-match-keys.js';
 import { removeExtraFields } from './remove-extra-fields.js';
 import { stripFences } from './strip-fences.js';
 import type {
+  FieldError,
   InputAnalysis,
   InputIssue,
   RepairError,
@@ -17,26 +20,32 @@ import type {
 } from './types.js';
 
 export { coerceTypes, makeCoercedSchema } from './coerce-types.js';
+export { extractJson } from './extract-json.js';
 export { fixJsonSyntax } from './fix-json.js';
+export { fuzzyMatchKeys } from './fuzzy-match-keys.js';
 export { removeExtraFields } from './remove-extra-fields.js';
 export { stripFences } from './strip-fences.js';
 export * from './types.js';
 
 const DEFAULT_STRATEGIES: RepairStrategyName[] = [
   'strip-fences',
+  'extract-json',
   'fix-json-syntax',
   'coerce-types',
+  'fuzzy-match-keys',
   'remove-extra-fields',
 ];
 
 const STRING_STRATEGIES: Map<RepairStrategyName, (input: string) => string> = new Map([
   ['strip-fences', stripFences],
+  ['extract-json', extractJson],
   ['fix-json-syntax', fixJsonSyntax],
 ]);
 
 const OBJECT_STRATEGIES: Map<RepairStrategyName, (schema: z.ZodType, data: unknown) => unknown> =
   new Map([
     ['coerce-types', coerceTypes],
+    ['fuzzy-match-keys', fuzzyMatchKeys],
     ['remove-extra-fields', removeExtraFields],
   ]);
 
@@ -203,6 +212,11 @@ export function repairOutput<T extends z.ZodType>(
 
   logger.debug('Repair failed after all attempts');
 
+  // Surface best-effort partial data and per-field validation errors so the
+  // caller can recover partially or pinpoint what is wrong.
+  const finalValidation = schema.safeParse(currentData);
+  const fieldErrors = finalValidation.success ? undefined : toFieldErrors(finalValidation.error);
+
   return {
     success: false,
     data: null,
@@ -210,7 +224,30 @@ export function repairOutput<T extends z.ZodType>(
     repairedInput: currentInput,
     steps,
     errors,
+    partialData: currentData,
+    fieldErrors,
   };
+}
+
+/** Formats a Zod issue path as a dot/bracket string, e.g. `address.zip` or `tags[0]`. */
+function formatPath(path: ReadonlyArray<string | number>): string {
+  let out = '';
+  for (const segment of path) {
+    if (typeof segment === 'number') {
+      out += `[${segment}]`;
+    } else {
+      out += out.length > 0 ? `.${segment}` : segment;
+    }
+  }
+  return out;
+}
+
+/** Maps a ZodError's issues to the lightweight FieldError shape used in results. */
+function toFieldErrors(error: z.ZodError): FieldError[] {
+  return error.issues.map((issue) => ({
+    path: formatPath(issue.path),
+    message: issue.message,
+  }));
 }
 
 /**

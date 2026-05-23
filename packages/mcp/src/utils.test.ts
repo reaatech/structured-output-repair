@@ -108,4 +108,164 @@ describe('jsonSchemaToZod', () => {
       z.ZodUnknown,
     );
   });
+
+  describe('const', () => {
+    it('converts a const to a literal', () => {
+      const result = jsonSchemaToZod({ const: 'fixed' });
+      expect(result.safeParse('fixed').success).toBe(true);
+      expect(result.safeParse('other').success).toBe(false);
+    });
+  });
+
+  describe('anyOf / oneOf', () => {
+    it('converts anyOf to a union', () => {
+      const result = jsonSchemaToZod({ anyOf: [{ type: 'string' }, { type: 'number' }] });
+      expect(result.safeParse('x').success).toBe(true);
+      expect(result.safeParse(5).success).toBe(true);
+      expect(result.safeParse(true).success).toBe(false);
+    });
+
+    it('converts oneOf to a union', () => {
+      const result = jsonSchemaToZod({ oneOf: [{ type: 'boolean' }, { type: 'null' }] });
+      expect(result.safeParse(true).success).toBe(true);
+      expect(result.safeParse(null).success).toBe(true);
+      expect(result.safeParse('x').success).toBe(false);
+    });
+  });
+
+  describe('allOf', () => {
+    it('converts allOf to an intersection', () => {
+      const result = jsonSchemaToZod({
+        allOf: [
+          { type: 'object', properties: { a: { type: 'string' } }, required: ['a'] },
+          { type: 'object', properties: { b: { type: 'number' } }, required: ['b'] },
+        ],
+      });
+      expect(result.safeParse({ a: 'x', b: 1 }).success).toBe(true);
+      expect(result.safeParse({ a: 'x' }).success).toBe(false);
+    });
+  });
+
+  describe('nullable type arrays', () => {
+    it('treats ["string", "null"] as a nullable string', () => {
+      const result = jsonSchemaToZod({ type: ['string', 'null'] });
+      expect(result.safeParse('x').success).toBe(true);
+      expect(result.safeParse(null).success).toBe(true);
+      expect(result.safeParse(5).success).toBe(false);
+    });
+  });
+
+  describe('string formats', () => {
+    it('validates email format', () => {
+      const result = jsonSchemaToZod({ type: 'string', format: 'email' });
+      expect(result.safeParse('a@b.com').success).toBe(true);
+      expect(result.safeParse('nope').success).toBe(false);
+    });
+
+    it('validates uuid format', () => {
+      const result = jsonSchemaToZod({ type: 'string', format: 'uuid' });
+      expect(result.safeParse('123e4567-e89b-12d3-a456-426614174000').success).toBe(true);
+      expect(result.safeParse('not-a-uuid').success).toBe(false);
+    });
+
+    it('validates uri/url format', () => {
+      const result = jsonSchemaToZod({ type: 'string', format: 'uri' });
+      expect(result.safeParse('https://example.com').success).toBe(true);
+      expect(result.safeParse('not a url').success).toBe(false);
+    });
+
+    it('ignores an invalid regex pattern instead of throwing', () => {
+      const result = jsonSchemaToZod({ type: 'string', pattern: '(' });
+      expect(result.safeParse('anything').success).toBe(true);
+    });
+  });
+
+  describe('default values', () => {
+    it('applies a default for a missing property', () => {
+      const result = jsonSchemaToZod({
+        type: 'object',
+        properties: { role: { type: 'string', default: 'user' } },
+      });
+      expect(result.parse({})).toEqual({ role: 'user' });
+    });
+  });
+
+  describe('additionalProperties', () => {
+    it('rejects extra keys when additionalProperties is false', () => {
+      const result = jsonSchemaToZod({
+        type: 'object',
+        properties: { a: { type: 'string' } },
+        required: ['a'],
+        additionalProperties: false,
+      });
+      expect(result.safeParse({ a: 'x' }).success).toBe(true);
+      expect(result.safeParse({ a: 'x', b: 1 }).success).toBe(false);
+    });
+
+    it('models a typed additionalProperties as a catchall', () => {
+      const result = jsonSchemaToZod({
+        type: 'object',
+        properties: { a: { type: 'string' } },
+        required: ['a'],
+        additionalProperties: { type: 'number' },
+      });
+      expect(result.safeParse({ a: 'x', extra: 5 }).success).toBe(true);
+      expect(result.safeParse({ a: 'x', extra: 'no' }).success).toBe(false);
+    });
+
+    it('models a property-less object with additionalProperties as a record', () => {
+      const result = jsonSchemaToZod({ type: 'object', additionalProperties: { type: 'number' } });
+      expect(result.safeParse({ x: 1, y: 2 }).success).toBe(true);
+      expect(result.safeParse({ x: 'no' }).success).toBe(false);
+    });
+  });
+
+  describe('tuples', () => {
+    it('converts an items array to a tuple', () => {
+      const result = jsonSchemaToZod({
+        type: 'array',
+        items: [{ type: 'string' }, { type: 'number' }],
+      });
+      expect(result.safeParse(['x', 1]).success).toBe(true);
+      expect(result.safeParse([1, 'x']).success).toBe(false);
+    });
+  });
+
+  describe('$ref', () => {
+    it('resolves a local $ref to $defs', () => {
+      const result = jsonSchemaToZod({
+        type: 'object',
+        properties: { user: { $ref: '#/$defs/User' } },
+        required: ['user'],
+        $defs: {
+          User: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+        },
+      });
+      expect(result.safeParse({ user: { name: 'Al' } }).success).toBe(true);
+      expect(result.safeParse({ user: {} }).success).toBe(false);
+    });
+
+    it('resolves a recursive $ref', () => {
+      const result = jsonSchemaToZod({
+        $ref: '#/$defs/Node',
+        $defs: {
+          Node: {
+            type: 'object',
+            properties: { value: { type: 'number' }, next: { $ref: '#/$defs/Node' } },
+            required: ['value'],
+          },
+        },
+      });
+      expect(result.safeParse({ value: 1, next: { value: 2 } }).success).toBe(true);
+      expect(result.safeParse({ value: 1, next: { value: 'no' } }).success).toBe(false);
+    });
+  });
+
+  describe('implicit objects', () => {
+    it('treats a schema with properties but no type as an object', () => {
+      const result = jsonSchemaToZod({ properties: { a: { type: 'string' } }, required: ['a'] });
+      expect(result.safeParse({ a: 'x' }).success).toBe(true);
+      expect(result.safeParse({}).success).toBe(false);
+    });
+  });
 });

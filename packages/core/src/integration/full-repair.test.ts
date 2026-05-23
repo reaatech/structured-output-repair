@@ -87,4 +87,44 @@ describe('Full repair pipeline', () => {
     const result = await repair(schema, input);
     expect(result).toEqual({ items: [{ id: 1 }, { id: 2 }] });
   });
+
+  it('should extract JSON wrapped in conversational prose', async () => {
+    const input =
+      'Sure! Here is the data you requested: { "name": "Eve", "age": 31 }. Let me know!';
+    const result = await repair(userSchema, input);
+    expect(result).toEqual({ name: 'Eve', age: 31 });
+  });
+
+  it('should normalize Python-style literals', async () => {
+    const schema = z.object({ name: z.string(), active: z.boolean(), note: z.string().nullable() });
+    const input = '{ "name": "Frank", "active": True, "note": None }';
+    const result = await repair(schema, input);
+    expect(result).toEqual({ name: 'Frank', active: true, note: null });
+  });
+
+  it('should fix hallucinated key casing/separators', async () => {
+    const schema = z.object({ firstName: z.string(), lastName: z.string() }).strict();
+    const input = '{ "first_name": "Grace", "last-name": "Hopper" }';
+    const result = await repair(schema, input);
+    expect(result).toEqual({ firstName: 'Grace', lastName: 'Hopper' });
+  });
+
+  it('should repair truncated/cut-off output', async () => {
+    const input = '{ "name": "Heidi", "age": 27, "tags": ["a", "b';
+    const result = await repair(userSchema, input);
+    expect(result).toEqual({ name: 'Heidi', age: 27, tags: ['a', 'b'] });
+  });
+
+  it('should combine prose extraction, fences, literals, and fuzzy keys', async () => {
+    const schema = z
+      .object({ userName: z.string(), isAdmin: z.boolean(), score: z.number() })
+      .strict();
+    const input = `Here's the result:
+\`\`\`json
+{ "user_name": "Ivy", "is_admin": False, "score": "98", "debug": True }
+\`\`\`
+Hope this helps!`;
+    const result = await repair(schema, input);
+    expect(result).toEqual({ userName: 'Ivy', isAdmin: false, score: 98 });
+  });
 });
