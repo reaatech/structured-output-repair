@@ -189,7 +189,6 @@ const shape = (schema as any)._def.shape;
 
 - [Zod Documentation](https://zod.dev/)
 - [Zod Source (internal types)](https://github.com/colinhacks/zod/tree/master/src)
-- [DEV_PLAN.md](../DEV_PLAN.md) — Full implementation specifications
 
 ## Related Skills
 

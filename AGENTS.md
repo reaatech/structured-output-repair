@@ -176,7 +176,6 @@ When requesting help from an AI agent, please:
 
 ## Key Resources
 
-- [DEV_PLAN.md](./DEV_PLAN.md) — Complete implementation specification
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — System-level design and data flow
 - [skills/](./skills/) — Agent skill definitions
 - [Zod Documentation](https://zod.dev/) — Schema validation library

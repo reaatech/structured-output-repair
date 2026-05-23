@@ -258,7 +258,6 @@ pnpm --filter @reaatech/structured-repair-core exec vitest bench --run
 
 - [Vitest Documentation](https://vitest.dev/)
 - [Vitest API Reference](https://vitest.dev/api/)
-- [DEV_PLAN.md](../DEV_PLAN.md) — Test case specifications
 
 ## Related Skills
 

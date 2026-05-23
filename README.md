@@ -119,7 +119,6 @@ On failure, `repairOutput` returns `partialData` (the best-effort parsed value) 
 
 - [`AGENTS.md`](./AGENTS.md) — AI agent development guide, coding conventions, and monorepo structure
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md) — Contribution workflow, coding standards, and release process
-- [`DEV_PLAN.md`](./DEV_PLAN.md) — Complete implementation specification
 
 ## License
 
