@@ -12,7 +12,7 @@ This monorepo implements a TypeScript library that catches and repairs malformed
 ┌─────────────────────────────────────────────────────────────┐
 │                 @reaatech/structured-repair-core             │
 │  ┌──────────────────┐  ┌────────────┐  ┌─────────────────┐  │
-│  │  Repair Pipeline  │  │ 4 Strategies│  │  Types & Errors │  │
+│  │  Repair Pipeline  │  │ 6 Strategies│  │  Types & Errors │  │
 │  │  (orchestrator)   │  │            │  │                 │  │
 │  └──────────────────┘  └────────────┘  └─────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
@@ -37,8 +37,8 @@ Raw LLM Output (string)
     │
     ▼
 Phase 1: String Strategies ────────────────────────────────────
-    │  strip-fences → fix-json-syntax
-    │  (remove markdown, fix syntax)
+    │  strip-fences → extract-json → fix-json-syntax
+    │  (remove markdown, extract from prose, fix syntax)
     ▼
 Phase 2: Parse JSON ──────────────────────────────────────────
     │  JSON.parse()
@@ -49,10 +49,10 @@ Phase 3: Direct Validation ─────────────────�
     │  (check if already valid)
     ▼
 Phase 4: Object Strategies (iterative, max 3 passes) ─────────
-    │  coerce-types → remove-extra-fields → revalidate
+    │  coerce-types → fuzzy-match-keys → remove-extra-fields → revalidate
     │  (loop until valid or no more changes)
     ▼
-RepairResult<T> { success, data, steps, errors }
+RepairResult<T> { success, data, steps, errors, partialData?, fieldErrors? }
 ```
 
 ### MCP Tool Request Flow
@@ -82,11 +82,13 @@ Tool Handler
 │        repairOutput,   │─────►│   ├─ analyzeInput()       │
 │        analyzeInput }  │      │   └─ types.ts             │
 │     from '@reaatech/   │      │                          │
-│     structured-repair- │      │ repair/strategies/        │
+│     structured-repair- │      │ repair/ (strategies)      │
 │     core'              │      │   ├─ strip-fences.ts      │
-│                        │      │   ├─ fix-json.ts          │
-│ utils.ts               │      │   ├─ coerce-types.ts      │
-│   └─ jsonSchemaToZod() │      │   └─ remove-extra-fields.ts
+│                        │      │   ├─ extract-json.ts      │
+│ utils.ts               │      │   ├─ fix-json.ts          │
+│   └─ jsonSchemaToZod() │      │   ├─ coerce-types.ts      │
+│                        │      │   ├─ fuzzy-match-keys.ts  │
+│                        │      │   └─ remove-extra-fields.ts
 └────────────────────────┘      │                          │
                                 │ utils/                    │
                                 │   ├─ errors.ts            │

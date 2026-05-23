@@ -14,8 +14,10 @@ An AI agent with this skill can:
 
 1. **Implement Repair Strategies** (`packages/core/src/repair/`)
    - `strip-fences.ts` — Remove markdown code fence wrappers
-   - `fix-json.ts` — Repair JSON syntax errors (trailing commas, missing braces, etc.)
+   - `extract-json.ts` — Extract JSON embedded in surrounding prose (string-aware)
+   - `fix-json.ts` — Repair JSON syntax errors (trailing commas, missing braces, Python literals, truncation, etc.)
    - `coerce-types.ts` — Use Zod coercion for type mismatches, rebuild schemas with coercers
+   - `fuzzy-match-keys.ts` — Remap misnamed keys to schema keys by case/separator
    - `remove-extra-fields.ts` — Strip hallucinated fields not in schema, recursive
 
 2. **Build Repair Pipeline** (`packages/core/src/repair/index.ts`)
@@ -93,9 +95,11 @@ packages/core/
 │   │   ├── index.ts          # Pipeline orchestrator + strategy registry
 │   │   ├── types.ts          # RepairOptions<T>, RepairResult<T>, RepairStep, etc.
 │   │   ├── strip-fences.ts   # Strategy 1: markdown fence removal
-│   │   ├── fix-json.ts       # Strategy 2: JSON syntax repair
-│   │   ├── coerce-types.ts   # Strategy 3: Zod type coercion
-│   │   └── remove-extra-fields.ts  # Strategy 4: hallucinated field removal
+│   │   ├── extract-json.ts   # Strategy 2: extract JSON from prose
+│   │   ├── fix-json.ts       # Strategy 3: JSON syntax repair (+ Python literals, truncation)
+│   │   ├── coerce-types.ts   # Strategy 4: Zod type coercion
+│   │   ├── fuzzy-match-keys.ts  # Strategy 5: remap misnamed keys
+│   │   └── remove-extra-fields.ts  # Strategy 6: hallucinated field removal
 │   ├── types/
 │   │   └── index.ts          # Type re-exports
 │   └── utils/
@@ -185,7 +189,6 @@ const shape = (schema as any)._def.shape;
 
 - [Zod Documentation](https://zod.dev/)
 - [Zod Source (internal types)](https://github.com/colinhacks/zod/tree/master/src)
-- [DEV_PLAN.md](../DEV_PLAN.md) — Full implementation specifications
 
 ## Related Skills
 

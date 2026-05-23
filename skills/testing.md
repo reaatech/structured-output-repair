@@ -83,13 +83,18 @@ packages/core/src/
 ├── repair/
 │   ├── index.ts
 │   ├── repair.test.ts              # Tests the repair pipeline
+│   ├── partial-result.test.ts      # Tests partialData / fieldErrors on failure
 │   ├── strip-fences.ts
 │   ├── strip-fences.test.ts        # Tests strip-fences strategy
+│   ├── extract-json.ts
+│   ├── extract-json.test.ts        # Tests extract-json strategy
 │   ├── fix-json.ts
-│   ├── fix-json.test.ts            # Tests fix-json strategy
+│   ├── fix-json.test.ts            # Tests fix-json strategy (incl. Python literals, truncation)
 │   ├── coerce-types.ts
 │   ├── coerce-types.test.ts        # Basic coercion tests
 │   ├── coerce-types-advanced.test.ts  # Advanced Zod type tests
+│   ├── fuzzy-match-keys.ts
+│   ├── fuzzy-match-keys.test.ts    # Tests fuzzy key remapping
 │   ├── remove-extra-fields.ts
 │   ├── remove-extra-fields.test.ts    # Basic field removal tests
 │   └── remove-extra-fields-advanced.test.ts  # Advanced Zod type tests
@@ -253,7 +258,6 @@ pnpm --filter @reaatech/structured-repair-core exec vitest bench --run
 
 - [Vitest Documentation](https://vitest.dev/)
 - [Vitest API Reference](https://vitest.dev/api/)
-- [DEV_PLAN.md](../DEV_PLAN.md) — Test case specifications
 
 ## Related Skills
 

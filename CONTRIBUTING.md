@@ -65,7 +65,7 @@ This is a **pnpm workspace monorepo** with Turborepo:
 
 ```
 packages/
-  core/         — Repair engine, all 4 strategies, types, errors
+  core/         — Repair engine, all 6 strategies, types, errors
   mcp/          — MCP server tool (depends on core)
 ```
 
@@ -120,14 +120,14 @@ Closes #42
 
 ### Suggesting Features
 
-1. Check existing issues and DEV_PLAN.md
+1. Check existing issues
 2. Use the feature request template
 3. Explain the use case and benefits
 4. Provide examples if helpful
 
 ### Contributing Code
 
-1. **Find an issue** - Check GitHub issues or DEV_PLAN.md for planned work
+1. **Find an issue** - Check GitHub issues for planned work
 2. **Comment on the issue** - Let others know you're working on it
 3. **Create a branch** - From main, create your feature branch
 4. **Implement changes** - Follow coding standards
@@ -236,7 +236,6 @@ pnpm release
 
 ## Resources
 
-- [DEV_PLAN.md](./DEV_PLAN.md) - Implementation specifications
 - [AGENTS.md](./AGENTS.md) - AI agent development guide
 - [Zod Documentation](https://zod.dev/)
 - [TypeScript Handbook](https://www.typescriptlang.org/docs/)

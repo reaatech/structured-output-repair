@@ -107,7 +107,7 @@ Repair malformed LLM output against a JSON Schema. Accepts a raw string `input`,
 | `input` | `string` | Yes | The raw LLM output to repair |
 | `schema` | `object` | Yes | JSON Schema to validate against (see supported subset below) |
 | `options.debug` | `boolean` | No | Enable debug logging (default: `false`) |
-| `options.strategies` | `string[]` | No | Custom repair strategies to apply (default: all four) |
+| `options.strategies` | `string[]` | No | Custom repair strategies to apply (default: all six — `strip-fences`, `extract-json`, `fix-json-syntax`, `coerce-types`, `fuzzy-match-keys`, `remove-extra-fields`) |
 
 ### `structured.analyze`
 
@@ -141,24 +141,29 @@ Analyze raw input for repair issues without applying repairs. Useful for diagnos
 |----------|------|----------|-------------|
 | `input` | `string` | Yes | The raw LLM output to analyze |
 
-### Supported JSON Schema Subset
+### Supported JSON Schema
 
-The MCP server converts JSON Schema to Zod internally. Currently supported keywords:
+The MCP server converts JSON Schema to Zod internally. Supported keywords:
 
-| Keyword | Supported Types |
-|---------|-----------------|
-| `type` | `string`, `number`, `integer`, `boolean`, `null`, `object`, `array` |
-| `properties` | `object` type |
-| `required` | `object` type |
-| `items` | `array` type |
-| `enum` | Any type |
+| Keyword | Notes |
+|---------|-------|
+| `type` | `string`, `number`, `integer`, `boolean`, `null`, `object`, `array`; also `type` arrays such as `["string","null"]` (nullable) |
+| `properties`, `required` | `object` type |
+| `additionalProperties` | `false` → strict, `true` → passthrough, schema → catchall / record |
+| `items` | `array` type; an array of schemas becomes a tuple |
+| `minItems`, `maxItems` | `array` type |
+| `enum`, `const` | Any type |
+| `anyOf`, `oneOf` | Union of subschemas |
+| `allOf` | Intersection of subschemas |
+| `$ref`, `$defs`, `definitions` | Local JSON Pointer refs, including recursive refs |
+| `default` | Any type |
 | `minimum`, `maximum` | `number`, `integer` |
-| `minLength`, `maxLength` | `string` type |
-| `pattern` | `string` type |
+| `minLength`, `maxLength`, `pattern` | `string` type |
+| `format` | `string` type: `email`, `uri`/`url`, `uuid`, `date-time` |
 
-Not yet supported: `$ref`, `$defs`, `allOf`, `anyOf`, `oneOf`, `additionalProperties`, `format`.
+Unrecognized keywords/types fall back to `z.unknown()` (permissive) rather than failing.
 
-> **Security Note:** `pattern` is compiled with `new RegExp(...)`. Only pass schemas from trusted sources — a pathological pattern can cause catastrophic backtracking (ReDoS) in the server process.
+> **Security Note:** `pattern` is compiled with `new RegExp(...)`. Invalid patterns are ignored rather than throwing, but a *valid* yet pathological pattern can still cause catastrophic backtracking (ReDoS) in the server process — only pass schemas from trusted sources.
 
 ## API Reference
 
@@ -204,7 +209,7 @@ const zodSchema = jsonSchemaToZod({
 
 ## Related Packages
 
-- [`@reaatech/structured-repair-core`](https://www.npmjs.com/package/@reaatech/structured-repair-core) — Core repair engine with four graduated strategies
+- [`@reaatech/structured-repair-core`](https://www.npmjs.com/package/@reaatech/structured-repair-core) — Core repair engine with six graduated strategies
 
 ## License
 
