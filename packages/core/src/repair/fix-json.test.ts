@@ -118,4 +118,59 @@ describe('fixJsonSyntax', () => {
     const result = fixJsonSyntax(input);
     expect(() => JSON.parse(result)).not.toThrow();
   });
+
+  describe('Python literals', () => {
+    it('should convert True/False to true/false', () => {
+      expect(fixJsonSyntax('{ "a": True, "b": False }')).toBe('{ "a": true, "b": false }');
+    });
+
+    it('should convert None to null', () => {
+      expect(fixJsonSyntax('{ "a": None }')).toBe('{ "a": null }');
+    });
+
+    it('should not convert Python literals inside string values', () => {
+      const input = '{ "a": "True story, None taken" }';
+      expect(fixJsonSyntax(input)).toBe(input);
+    });
+  });
+
+  describe('string-aware comma insertion', () => {
+    it('should not insert commas inside string values', () => {
+      const input = '{ "note": "scored 5 [pts] and 2 {bonus}" }';
+      const result = fixJsonSyntax(input);
+      expect(JSON.parse(result)).toEqual({ note: 'scored 5 [pts] and 2 {bonus}' });
+    });
+
+    it('should not corrupt strings that contain bracket/value patterns', () => {
+      const input = '{ "a": "1 [2] 3", "b": "true false" }';
+      expect(fixJsonSyntax(input)).toBe(input);
+    });
+  });
+
+  describe('truncation', () => {
+    it('should close an unterminated string', () => {
+      const result = fixJsonSyntax('{ "name": "Jo');
+      expect(JSON.parse(result)).toEqual({ name: 'Jo' });
+    });
+
+    it('should close a truncated array of strings', () => {
+      const result = fixJsonSyntax('{ "items": ["a", "b');
+      expect(JSON.parse(result)).toEqual({ items: ['a', 'b'] });
+    });
+
+    it('should drop a dangling trailing comma at end of input', () => {
+      const result = fixJsonSyntax('{ "a": 1, "b": 2,');
+      expect(JSON.parse(result)).toEqual({ a: 1, b: 2 });
+    });
+
+    it('should supply null for a dangling trailing colon', () => {
+      const result = fixJsonSyntax('{ "a": 1, "b":');
+      expect(JSON.parse(result)).toEqual({ a: 1, b: null });
+    });
+
+    it('should repair deeply truncated nested output', () => {
+      const result = fixJsonSyntax('{ "user": { "name": "Al", "tags": ["x"');
+      expect(JSON.parse(result)).toEqual({ user: { name: 'Al', tags: ['x'] } });
+    });
+  });
 });

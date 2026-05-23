@@ -6,18 +6,22 @@
 
 > Repair malformed LLM structured outputs instead of crashing.
 
-Every production agent system has this problem: you ask for JSON, you get JSON wrapped in markdown fences, or with trailing commas, or missing closing braces, or with hallucinated fields. This library takes a **Zod schema** plus the raw LLM output and attempts graduated repair across four strategies — it either returns valid, schema-conforming data or gives you detailed diagnostics explaining what went wrong.
+Every production agent system has this problem: you ask for JSON, you get JSON wrapped in markdown fences, or buried in prose, or with trailing commas, or cut off mid-stream, or with hallucinated/misnamed fields. This library takes a **Zod schema** plus the raw LLM output and attempts graduated repair across six strategies — it either returns valid, schema-conforming data or gives you detailed diagnostics (including best-effort partial data and per-field errors) explaining what went wrong.
 
 This monorepo provides a core repair engine library and an MCP server tool for use with Claude Desktop and other MCP-compatible clients.
 
 ## Features
 
-- **Four graduated repair strategies** — strip-fences, fix-json-syntax, coerce-types, remove-extra-fields
+- **Six graduated repair strategies** — strip-fences, extract-json, fix-json-syntax, coerce-types, fuzzy-match-keys, remove-extra-fields
+- **Prose extraction** — pulls the JSON out of conversational wrappers like `Sure! Here is the JSON: {...}`
+- **Truncation repair** — closes unterminated strings, dangling separators, and missing braces from cut-off streams
+- **Python-literal tolerance** — normalizes `True`/`False`/`None` (and `NaN`/`Infinity`/`undefined`) to valid JSON
+- **Fuzzy key matching** — maps hallucinated/misnamed keys to schema keys (`e-mail` → `email`, `first_name` → `firstName`)
 - **Full type inference** — repaired data inherits the exact `z.infer<T>` type from your Zod schema
-- **Detailed failure diagnostics** — per-strategy step tracking, accumulated errors, and on-failure callbacks
+- **Detailed failure diagnostics** — per-strategy step tracking, accumulated errors, best-effort `partialData`, and per-`fieldErrors` paths
 - **Input analysis** — inspect raw LLM output for common issues without applying repairs
 - **MCP server** — expose repair functionality as MCP tools (`structured.repair`, `structured.analyze`) for Claude Desktop and other clients
-- **JSON Schema → Zod conversion** — the MCP tool accepts standard JSON Schema; no programmatic Zod required
+- **Rich JSON Schema → Zod conversion** — `anyOf`/`oneOf`/`allOf`, `$ref`/`$defs` (incl. recursive), `const`, `default`, nullable type arrays, `format` (email/uri/uuid/date-time), `additionalProperties`, and tuples
 - **Strategy customization** — pick which strategies to run, in what order
 - **Dual ESM/CJS output** — works with `import` and `require`
 
@@ -98,12 +102,18 @@ Use the MCP server with Claude Desktop:
 
 ## Repair Strategies
 
+Strategies run in order; the engine validates after each and returns as soon as the data conforms.
+
 | Strategy | What it fixes |
 |----------|---------------|
 | `strip-fences` | Markdown code fences (` ```json {...} ``` `), nested fences, language hints |
-| `fix-json-syntax` | Trailing commas, missing braces/brackets, unquoted keys, single quotes, missing commas, `NaN`/`Infinity`/`undefined`, comments |
+| `extract-json` | JSON embedded in conversational prose (`Here is the JSON: {...}`); string-aware, also recovers truncated tails |
+| `fix-json-syntax` | Trailing commas, missing/unbalanced braces & brackets, unquoted keys, single quotes, missing commas, comments, `NaN`/`Infinity`/`undefined`, Python `True`/`False`/`None`, and truncated/cut-off output |
 | `coerce-types` | String→number, string→boolean, string→bigint, string→date, nested object/array coercion |
+| `fuzzy-match-keys` | Hallucinated/misnamed keys remapped to schema keys by case/separator (`e-mail` → `email`, `first_name` → `firstName`) |
 | `remove-extra-fields` | Hallucinated fields not in schema, deeply nested (works with `.strict()` schemas) |
+
+On failure, `repairOutput` returns `partialData` (the best-effort parsed value) and `fieldErrors` (per-field schema violations with dot/bracket paths like `address.zip` or `tags[1]`) alongside the step-by-step `steps` and `errors`.
 
 ## Documentation
 
