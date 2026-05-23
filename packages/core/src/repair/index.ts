@@ -215,9 +215,13 @@ export function repairOutput<T extends z.ZodType>(
 
 /**
  * Quick repair function that throws UnrepairableError on failure.
+ *
+ * Returns a Promise even though the current repair pipeline is synchronous:
+ * the async signature is intentional so future async strategies (e.g. an
+ * LLM-assisted repair pass) can be added without a breaking API change.
  */
 export async function repair<T extends z.ZodType>(schema: T, input: string): Promise<z.infer<T>> {
-  const result = await repairOutput({ schema, input });
+  const result = repairOutput({ schema, input });
   if (!result.success) {
     throw new UnrepairableError('Input could not be repaired', input, result.steps);
   }
