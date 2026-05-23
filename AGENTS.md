@@ -16,7 +16,7 @@ This is a **pnpm workspace monorepo** managed with Turborepo.
 
 ```
 packages/
-  core/         — Repair engine, all 4 strategies, types, errors, logger
+  core/         — Repair engine, all 6 strategies, types, errors, logger
   mcp/          — MCP server tool (depends on core)
 ```
 
@@ -27,11 +27,13 @@ packages/core/src/
   index.ts                          — Public API barrel (repair, repairOutput, isValid, analyzeInput)
   repair/
     index.ts                        — Pipeline orchestrator + strategy registry
-    types.ts                        — RepairOptions<T>, RepairResult<T>, RepairStep, RepairStrategyName
+    types.ts                        — RepairOptions<T>, RepairResult<T>, RepairStep, FieldError, RepairStrategyName
     strip-fences.ts                 — Strategy 1: markdown fence removal
-    fix-json.ts                     — Strategy 2: JSON syntax repair
-    coerce-types.ts                 — Strategy 3: Zod type coercion (walks Zod internals)
-    remove-extra-fields.ts          — Strategy 4: hallucinated field removal (recursive)
+    extract-json.ts                 — Strategy 2: extract JSON from surrounding prose (string-aware)
+    fix-json.ts                     — Strategy 3: JSON syntax repair (incl. Python literals + truncation)
+    coerce-types.ts                 — Strategy 4: Zod type coercion (walks Zod internals)
+    fuzzy-match-keys.ts             — Strategy 5: remap misnamed keys to schema keys
+    remove-extra-fields.ts          — Strategy 6: hallucinated field removal (recursive)
   types/index.ts                    — Type re-exports
   utils/
     errors.ts                       — StructuredRepairError, UnrepairableError, etc.

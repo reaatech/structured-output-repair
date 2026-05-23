@@ -65,7 +65,7 @@ This is a **pnpm workspace monorepo** with Turborepo:
 
 ```
 packages/
-  core/         — Repair engine, all 4 strategies, types, errors
+  core/         — Repair engine, all 6 strategies, types, errors
   mcp/          — MCP server tool (depends on core)
 ```
 

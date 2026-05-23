@@ -97,7 +97,7 @@ Use the MCP server with Claude Desktop:
 
 | Package | Description |
 | ------- | ----------- |
-| [`@reaatech/structured-repair-core`](./packages/core) | Core repair engine with four graduated strategies, types, and error classes |
+| [`@reaatech/structured-repair-core`](./packages/core) | Core repair engine with six graduated strategies, types, and error classes |
 | [`@reaatech/structured-repair-mcp`](./packages/mcp) | MCP server exposing repair as tools for Claude Desktop and other MCP clients |
 
 ## Repair Strategies

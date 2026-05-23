@@ -6,7 +6,9 @@
 
 > **Status:** Pre-1.0 — APIs may change in minor versions. Pin to a specific version in production.
 
-Core repair engine that catches malformed LLM structured outputs and repairs them instead of crashing. Takes a **Zod schema** plus raw LLM output and applies a graduated pipeline of four strategies to produce valid, schema-conforming data.
+Core repair engine that catches malformed LLM structured outputs and repairs them instead of crashing. Takes a **Zod schema** plus raw LLM output and applies a graduated pipeline of six strategies to produce valid, schema-conforming data.
+
+> **Peer dependency:** `zod` (`^3.23.0`) is a peer dependency — install it in your project alongside this package.
 
 ## Installation
 
@@ -18,12 +20,15 @@ pnpm add @reaatech/structured-repair-core
 
 ## Feature Overview
 
-- **4 graduated repair strategies** — applied in sequence, each targeting a specific class of LLM output failure
+- **6 graduated repair strategies** — applied in sequence, each targeting a specific class of LLM output failure
+- **Prose extraction** — pulls JSON out of conversational wrappers like `Sure! Here is the JSON: {...}`
+- **Truncation repair** — closes unterminated strings, dangling separators, and missing braces from cut-off streams
 - **Type coercion** — auto-converts string→number, string→boolean, string→date, and more via Zod's coercion primitives
+- **Fuzzy key matching** — remaps hallucinated/misnamed keys to schema keys (`e-mail` → `email`, `first_name` → `firstName`)
 - **Extra field removal** — recursively strips hallucinated fields not defined in your schema (critical for `.strict()`)
 - **Input analysis** — inspects raw input for common issues without applying repairs
 - **Strategy customization** — pick which strategies to run, in what order
-- **Detailed result tracking** — per-step success/failure metadata for debugging
+- **Detailed result tracking** — per-step metadata, plus best-effort `partialData` and per-field `fieldErrors` on failure
 - **Full type inference** — repaired data inherits the exact `z.infer<T>` type from your schema
 - **Dual ESM/CJS output** — works with `import` and `require`
 
@@ -57,31 +62,33 @@ const result = await repairOutput({
 
 ## Repair Strategies
 
+Strategies run in this order; the engine validates after each and returns as soon as the data conforms.
+
 | Strategy | What it fixes |
 |----------|---------------|
 | `strip-fences` | Markdown code fences (` ```json {...} ``` `), nested fences, language hints |
-| `fix-json-syntax` | Trailing commas, missing braces/brackets, unquoted keys, single quotes, missing commas, `NaN`/`Infinity`/`undefined`, comments |
+| `extract-json` | JSON embedded in conversational prose (`Here is the JSON: {...}`); string-aware, also recovers truncated tails |
+| `fix-json-syntax` | Trailing commas, missing/unbalanced braces & brackets, unquoted keys, single quotes, missing commas, comments, `NaN`/`Infinity`/`undefined`, Python `True`/`False`/`None`, and truncated/cut-off output |
 | `coerce-types` | String→number, string→boolean, string→bigint, string→date, nested object/array coercion |
+| `fuzzy-match-keys` | Hallucinated/misnamed keys remapped to schema keys by case/separator (`e-mail` → `email`, `first_name` → `firstName`) |
 | `remove-extra-fields` | Hallucinated fields not in schema, deeply nested (works with `.strict()` schemas) |
 
 ## API Reference
 
-### `repair(schema, input?, options?)`
+### `repair(schema, input)`
 
-Quick repair that returns typed data or throws `UnrepairableError`.
+Quick repair that returns typed data or throws `UnrepairableError`. Runs the full default strategy pipeline; use `repairOutput` if you need diagnostics or custom strategies.
 
 ```typescript
 import { repair } from "@reaatech/structured-repair-core";
 
 const data = await repair(userSchema, rawLlmOutput);
-const data = await repair(userSchema, rawLlmOutput, { debug: true });
 ```
 
 | Argument | Type | Description |
 |----------|------|-------------|
 | `schema` | `z.ZodType<T>` | Zod schema to validate against |
 | `input` | `string` | Raw LLM output string |
-| `options` | `RepairOptions<T>` | Optional configuration (see below) |
 
 ### `repairOutput(options)`
 
@@ -115,7 +122,7 @@ if (result.success) {
 | `schema` | `z.ZodType<T>` | (required) | Zod schema to validate against |
 | `input` | `string` | (required) | Raw LLM output string |
 | `debug` | `boolean` | `false` | Enable debug logging to stderr |
-| `strategies` | `RepairStrategyName[]` | All four | Which strategies to apply, in order |
+| `strategies` | `RepairStrategyName[]` | All six | Which strategies to apply, in order |
 | `onFailure` | `(context: RepairFailureContext) => void` | — | Callback invoked when all strategies fail |
 
 ### `RepairResult<T>`
@@ -128,6 +135,8 @@ if (result.success) {
 | `repairedInput` | `string?` | Input after string-level repairs |
 | `steps` | `RepairStep[]` | Per-strategy attempt details |
 | `errors` | `RepairError[]` | Accumulated errors across all strategies |
+| `partialData` | `unknown?` | On failure: best-effort parsed value that still failed validation (`undefined` if JSON never parsed) |
+| `fieldErrors` | `FieldError[]?` | On failure: per-field schema violations with dot/bracket `path`s (e.g. `address.zip`, `tags[1]`) |
 
 ### `isValid(schema, input)`
 
@@ -167,7 +176,7 @@ All errors extend `StructuredRepairError` which includes `code: string` and `mes
 | `StructuredRepairError` | (custom) | Base class for all repair errors |
 | `UnrepairableError` | `UNREPAIRABLE` | All repair strategies exhausted without success |
 | `SchemaMismatchError` | `SCHEMA_MISMATCH` | Type coercion failed at the Zod level |
-| `JsonSyntaxError` | `JSON_SYNTAX` | Input could not be parsed as JSON |
+| `JsonSyntaxError` | `JSON_SYNTAX_ERROR` | Input could not be parsed as JSON |
 
 ## Usage Patterns
 
@@ -187,11 +196,26 @@ const result = await repairOutput({
 });
 ```
 
+### Recovering Partial Data on Failure
+
+```typescript
+const result = repairOutput({ schema: userSchema, input: badLlmOutput });
+
+if (!result.success) {
+  // Best-effort value that still failed validation (undefined if JSON never parsed)
+  console.log("Partial:", result.partialData);
+  // Which fields were wrong, with paths like "address.zip" or "tags[1]"
+  for (const { path, message } of result.fieldErrors ?? []) {
+    console.warn(`${path}: ${message}`);
+  }
+}
+```
+
 ### Custom Strategy Order
 
 ```typescript
 // Skip extra field removal, run coerce-types first
-const result = await repairOutput({
+const result = repairOutput({
   schema: mySchema,
   input: rawLlmOutput,
   strategies: ["coerce-types", "fix-json-syntax"],
