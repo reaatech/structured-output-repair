@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { isZodV4Schema } from '../utils/zod-internals.js';
 import { makeCoercedSchema } from './coerce-types.js';
 
 describe('makeCoercedSchema advanced types', () => {
@@ -190,7 +191,9 @@ describe('makeCoercedSchema advanced types', () => {
     const result = coerced.safeParse({ val: 'hello' });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.val).toBe(5);
+      // zod 3 hands the catch handler the raw input ('hello' -> length 5);
+      // zod 4 hands it the failed post-coercion value (NaN -> no length).
+      expect(result.data.val).toBe(isZodV4Schema(schema) ? undefined : 5);
     }
   });
 

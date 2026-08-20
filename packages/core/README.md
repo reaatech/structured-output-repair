@@ -8,7 +8,7 @@
 
 Core repair engine that catches malformed LLM structured outputs and repairs them instead of crashing. Takes a **Zod schema** plus raw LLM output and applies a graduated pipeline of six strategies to produce valid, schema-conforming data.
 
-> **Peer dependency:** `zod` (`^3.23.0`) is a peer dependency — install it in your project alongside this package.
+> **Peer dependency:** `zod` (`^3.23.0 || ^4.4.0`) is a peer dependency — install it in your project alongside this package. Both zod 3 and zod 4 schema objects are supported at runtime.
 
 ## Installation
 

@@ -1,119 +1,146 @@
 import { z } from 'zod';
 import { SchemaMismatchError } from '../utils/errors.js';
-import { zodDef } from '../utils/zod-internals.js';
+import {
+  getArrayElement,
+  getCatchValue,
+  getDefaultValue,
+  getEnumValues,
+  getInnerType,
+  getIntersectionSides,
+  getLazyGetter,
+  getLiteralValues,
+  getMapKeyValue,
+  getNativeEnumValues,
+  getObjectShape,
+  getPromiseInnerType,
+  getRecordKeyValue,
+  getSetValueType,
+  getTupleItems,
+  getUnionOptions,
+  getUnknownKeysMode,
+  isZodV4Schema,
+  zodKind,
+} from '../utils/zod-internals.js';
 
 /**
  * Creates a coerced version of a Zod schema.
- * Supported types: ZodString, ZodNumber, ZodBoolean, ZodBigInt, ZodDate,
- * ZodOptional, ZodNullable, ZodDefault, ZodObject, ZodArray, ZodUnion,
- * ZodLiteral, ZodEnum, ZodRecord, ZodTuple, ZodAny, ZodUnknown, ZodNull, ZodUndefined.
+ * Supported kinds: string, number, boolean, bigint, date,
+ * optional, nullable, default, object, array, record, union,
+ * literal, enum, tuple, any, unknown, null, undefined.
+ *
+ * Works with both zod 3 and zod 4 schema objects: introspection dispatches
+ * on the detected Zod version, while the rebuilt schema is constructed with
+ * the `zod` module resolved by the consumer (which is the same version that
+ * created the input schema in any sane installation).
  */
 export function makeCoercedSchema(schema: z.ZodType): z.ZodType {
+  const kind = zodKind(schema);
+
   // Primitives
-  if (schema instanceof z.ZodString) return z.coerce.string();
-  if (schema instanceof z.ZodNumber) return z.coerce.number();
-  if (schema instanceof z.ZodBoolean) return z.coerce.boolean();
-  if (schema instanceof z.ZodBigInt) return z.coerce.bigint();
-  if (schema instanceof z.ZodDate) return z.coerce.date();
+  if (kind === 'string') return z.coerce.string();
+  if (kind === 'number') return z.coerce.number();
+  if (kind === 'boolean') return z.coerce.boolean();
+  if (kind === 'bigint') return z.coerce.bigint();
+  if (kind === 'date') return z.coerce.date();
 
   // Pass-through types
-  if (schema instanceof z.ZodAny) return z.any();
-  if (schema instanceof z.ZodUnknown) return z.unknown();
-  if (schema instanceof z.ZodNull) return z.null();
-  if (schema instanceof z.ZodUndefined) return z.undefined();
-  if (schema instanceof z.ZodVoid) return z.void();
-  if (schema instanceof z.ZodLiteral) {
-    return z.literal(zodDef<{ value: z.Primitive }>(schema).value);
+  if (kind === 'any') return z.any();
+  if (kind === 'unknown') return z.unknown();
+  if (kind === 'null') return z.null();
+  if (kind === 'undefined') return z.undefined();
+  if (kind === 'void') return z.void();
+  if (kind === 'literal') {
+    const values = getLiteralValues(schema);
+    if (isZodV4Schema(schema) && values.length > 1) {
+      // zod 4 literals can hold several values; z.literal accepts an array there.
+      return (z.literal as (value: unknown) => z.ZodType)(values);
+    }
+    return z.literal(values[0] as z.Primitive);
   }
-  if (schema instanceof z.ZodEnum) {
-    return z.enum(zodDef<{ values: readonly [string, ...string[]] }>(schema).values);
+  if (kind === 'enum') {
+    return z.enum(getEnumValues(schema) as [string, ...string[]]);
   }
-  if (schema instanceof z.ZodNativeEnum) {
-    const values = zodDef<{
-      values: { [k: string]: string | number; [nu: number]: string };
-    }>(schema).values;
-    return z.nativeEnum(values);
+  if (kind === 'nativeEnum') {
+    // zod 3 only — zod 4 has no native enum kind (z.nativeEnum maps to z.enum).
+    return z.nativeEnum(getNativeEnumValues(schema));
   }
 
   // Wrappers
-  if (schema instanceof z.ZodOptional) {
-    return makeCoercedSchema(schema.unwrap()).optional();
+  if (kind === 'optional') {
+    return makeCoercedSchema(getInnerType(schema)).optional();
   }
-  if (schema instanceof z.ZodNullable) {
-    return makeCoercedSchema(schema.unwrap()).nullable();
+  if (kind === 'nullable') {
+    return makeCoercedSchema(getInnerType(schema)).nullable();
   }
-  if (schema instanceof z.ZodDefault) {
-    const inner = makeCoercedSchema(schema.removeDefault());
-    const raw = zodDef<{ defaultValue: unknown }>(schema).defaultValue;
-    const defaultValue = typeof raw === 'function' ? (raw as () => unknown)() : raw;
-    return inner.default(defaultValue);
+  if (kind === 'default') {
+    const inner = makeCoercedSchema(getInnerType(schema));
+    return inner.default(getDefaultValue(schema));
   }
-  if (schema instanceof z.ZodCatch) {
-    const inner = makeCoercedSchema(schema.removeCatch());
-    const catchFn = zodDef<{
-      catchValue: (input: unknown) => unknown;
-    }>(schema).catchValue;
-    return inner.catch(catchFn);
+  if (kind === 'catch') {
+    const inner = makeCoercedSchema(getInnerType(schema));
+    return inner.catch(getCatchValue(schema));
   }
-  if (schema instanceof z.ZodEffects) {
+  if (kind === 'effects') {
     return schema;
   }
-  if (schema instanceof z.ZodLazy) {
-    const getter = zodDef<{ getter: () => z.ZodType }>(schema).getter;
+  if (kind === 'lazy') {
+    const getter = getLazyGetter(schema);
     return z.lazy(() => makeCoercedSchema(getter()));
   }
-  if (schema instanceof z.ZodPromise) {
-    return z.promise(makeCoercedSchema(schema.unwrap()));
+  if (kind === 'promise') {
+    return z.promise(makeCoercedSchema(getPromiseInnerType(schema)));
   }
 
   // Collections
-  if (schema instanceof z.ZodObject) {
-    const def = zodDef<{
-      shape: () => Record<string, z.ZodType>;
-      unknownKeys: string;
-    }>(schema);
-    const rawShape = def.shape();
+  if (kind === 'object') {
+    const rawShape = getObjectShape(schema);
     const newShape: Record<string, z.ZodType> = {};
     for (const [key, value] of Object.entries(rawShape)) {
       newShape[key] = makeCoercedSchema(value);
     }
     const obj = z.object(newShape);
-    if (def.unknownKeys === 'strict') return obj.strict();
-    if (def.unknownKeys === 'passthrough') return obj.passthrough();
+    const unknownKeys = getUnknownKeysMode(schema);
+    if (unknownKeys === 'strict') return obj.strict();
+    if (unknownKeys === 'passthrough') return obj.passthrough();
     return obj;
   }
-  if (schema instanceof z.ZodArray) {
-    return z.array(makeCoercedSchema(schema.element));
+  if (kind === 'array') {
+    return z.array(makeCoercedSchema(getArrayElement(schema)));
   }
-  if (schema instanceof z.ZodRecord) {
-    return z.record(makeCoercedSchema(schema.valueSchema));
+  if (kind === 'record') {
+    const { keyType, valueType } = getRecordKeyValue(schema);
+    if (isZodV4Schema(schema)) {
+      // zod 4 records always carry an explicit key schema; preserve it.
+      return z.record(makeCoercedSchema(keyType), makeCoercedSchema(valueType));
+    }
+    return z.record(makeCoercedSchema(valueType));
   }
-  if (schema instanceof z.ZodMap) {
-    return z.map(makeCoercedSchema(schema.keySchema), makeCoercedSchema(schema.valueSchema));
+  if (kind === 'map') {
+    const { keyType, valueType } = getMapKeyValue(schema);
+    return z.map(makeCoercedSchema(keyType), makeCoercedSchema(valueType));
   }
-  if (schema instanceof z.ZodSet) {
-    return z.set(makeCoercedSchema(schema._def.valueType));
+  if (kind === 'set') {
+    return z.set(makeCoercedSchema(getSetValueType(schema)));
   }
-  if (schema instanceof z.ZodTuple) {
-    const def = zodDef<{ items: z.ZodType[]; rest: z.ZodType | null }>(schema);
-    const coercedItems = def.items.map(makeCoercedSchema);
-    if (def.rest) {
-      return z.tuple(coercedItems as [z.ZodType, ...z.ZodType[]]).rest(makeCoercedSchema(def.rest));
+  if (kind === 'tuple') {
+    const { items, rest } = getTupleItems(schema);
+    const coercedItems = items.map(makeCoercedSchema);
+    if (rest) {
+      return z.tuple(coercedItems as [z.ZodType, ...z.ZodType[]]).rest(makeCoercedSchema(rest));
     }
     return z.tuple(coercedItems as [z.ZodType, ...z.ZodType[]]);
   }
-  if (schema instanceof z.ZodUnion) {
-    const options = zodDef<{ options: z.ZodType[] }>(schema).options;
+  if (kind === 'union') {
+    const options = getUnionOptions(schema);
     return z.union(options.map(makeCoercedSchema) as [z.ZodType, z.ZodType, ...z.ZodType[]]);
   }
-  if (schema instanceof z.ZodDiscriminatedUnion) {
-    const options = zodDef<{ options: z.ZodType[] }>(schema).options;
-    const coercedOptions = options.map(makeCoercedSchema);
+  if (kind === 'discriminatedUnion') {
+    const coercedOptions = getUnionOptions(schema).map(makeCoercedSchema);
     if (coercedOptions.length === 1) return coercedOptions[0];
     return z.union(coercedOptions as [z.ZodType, z.ZodType, ...z.ZodType[]]);
   }
-  if (schema instanceof z.ZodIntersection) {
-    const { left, right } = zodDef<{ left: z.ZodType; right: z.ZodType }>(schema);
+  if (kind === 'intersection') {
+    const { left, right } = getIntersectionSides(schema);
     return z.intersection(makeCoercedSchema(left), makeCoercedSchema(right));
   }
 

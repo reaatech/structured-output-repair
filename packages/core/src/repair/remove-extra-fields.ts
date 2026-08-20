@@ -1,65 +1,80 @@
 import { z } from 'zod';
-import { zodDef } from '../utils/zod-internals.js';
+import {
+  getArrayElement,
+  getInnerType,
+  getIntersectionSides,
+  getLazyGetter,
+  getMapKeyValue,
+  getObjectShape,
+  getRecordKeyValue,
+  getSetValueType,
+  getTupleItems,
+  getUnionOptions,
+  getUnknownKeysMode,
+  zodKind,
+} from '../utils/zod-internals.js';
+
+/** Kinds that never have fields to strip: primitives, literals, enums, pass-throughs. */
+const LEAF_KINDS: ReadonlySet<string> = new Set([
+  'string',
+  'number',
+  'boolean',
+  'bigint',
+  'date',
+  'literal',
+  'enum',
+  'nativeEnum',
+  'any',
+  'unknown',
+  'null',
+  'undefined',
+  'void',
+]);
 
 /**
  * Recursively removes fields from data that are not defined in the schema.
  * This is useful when a strict Zod schema rejects extra fields that the LLM hallucinated.
+ *
+ * Works with both zod 3 and zod 4 schema objects.
  */
 export function removeExtraFields(schema: z.ZodType, data: unknown): unknown {
+  const kind = zodKind(schema);
+
   // Primitives and pass-through types
-  if (
-    schema instanceof z.ZodString ||
-    schema instanceof z.ZodNumber ||
-    schema instanceof z.ZodBoolean ||
-    schema instanceof z.ZodBigInt ||
-    schema instanceof z.ZodDate ||
-    schema instanceof z.ZodLiteral ||
-    schema instanceof z.ZodEnum ||
-    schema instanceof z.ZodNativeEnum ||
-    schema instanceof z.ZodAny ||
-    schema instanceof z.ZodUnknown ||
-    schema instanceof z.ZodNull ||
-    schema instanceof z.ZodUndefined ||
-    schema instanceof z.ZodVoid
-  ) {
+  if (LEAF_KINDS.has(kind)) {
     return data;
   }
 
   // Wrappers
-  if (schema instanceof z.ZodOptional) {
+  if (kind === 'optional') {
     if (data === undefined) return undefined;
-    return removeExtraFields(schema.unwrap(), data);
+    return removeExtraFields(getInnerType(schema), data);
   }
-  if (schema instanceof z.ZodNullable) {
+  if (kind === 'nullable') {
     if (data === null) return null;
-    return removeExtraFields(schema.unwrap(), data);
+    return removeExtraFields(getInnerType(schema), data);
   }
-  if (schema instanceof z.ZodDefault) {
-    return removeExtraFields(schema.removeDefault(), data);
+  if (kind === 'default') {
+    return removeExtraFields(getInnerType(schema), data);
   }
-  if (schema instanceof z.ZodCatch) {
-    return removeExtraFields(schema.removeCatch(), data);
+  if (kind === 'catch') {
+    return removeExtraFields(getInnerType(schema), data);
   }
-  if (schema instanceof z.ZodEffects) {
+  if (kind === 'effects') {
     return data;
   }
-  if (schema instanceof z.ZodLazy) {
-    const getter = zodDef<{ getter: () => z.ZodType }>(schema).getter;
-    return removeExtraFields(getter(), data);
+  if (kind === 'lazy') {
+    return removeExtraFields(getLazyGetter(schema)(), data);
   }
-  if (schema instanceof z.ZodPromise) {
+  if (kind === 'promise') {
     return data;
   }
 
   // Collections
-  if (schema instanceof z.ZodObject) {
+  if (kind === 'object') {
     if (typeof data !== 'object' || data === null) return data;
-    const def = zodDef<{
-      unknownKeys: string;
-      shape: () => Record<string, z.ZodType>;
-    }>(schema);
-    if (def.unknownKeys === 'passthrough') return data;
-    const shape = def.shape();
+    if (getUnknownKeysMode(schema) === 'passthrough') return data;
+    const shape = getObjectShape(schema);
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
       if (key in shape) {
@@ -69,52 +84,56 @@ export function removeExtraFields(schema: z.ZodType, data: unknown): unknown {
     }
     return result;
   }
-  if (schema instanceof z.ZodArray) {
+  if (kind === 'array') {
     if (!Array.isArray(data)) return data;
-    return data.map((item) => removeExtraFields(schema.element, item));
+    const element = getArrayElement(schema);
+    return data.map((item) => removeExtraFields(element, item));
   }
-  if (schema instanceof z.ZodRecord) {
+  if (kind === 'record') {
     if (typeof data !== 'object' || data === null) return data;
+    const { valueType } = getRecordKeyValue(schema);
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
-      result[key] = removeExtraFields(schema.valueSchema, value);
+      result[key] = removeExtraFields(valueType, value);
     }
     return result;
   }
-  if (schema instanceof z.ZodMap) {
+  if (kind === 'map') {
     if (!(data instanceof Map)) return data;
+    const { valueType } = getMapKeyValue(schema);
     const result = new Map();
     for (const [key, value] of data.entries()) {
-      result.set(key, removeExtraFields(schema.valueSchema, value));
+      result.set(key, removeExtraFields(valueType, value));
     }
     return result;
   }
-  if (schema instanceof z.ZodSet) {
+  if (kind === 'set') {
     if (!(data instanceof Set)) return data;
+    const valueType = getSetValueType(schema);
     const result = new Set();
     for (const item of data) {
-      result.add(removeExtraFields(schema._def.valueType, item));
+      result.add(removeExtraFields(valueType, item));
     }
     return result;
   }
-  if (schema instanceof z.ZodTuple) {
+  if (kind === 'tuple') {
     if (!Array.isArray(data)) return data;
-    const def = zodDef<{ items: z.ZodType[]; rest: z.ZodType | null }>(schema);
+    const { items, rest } = getTupleItems(schema);
     const result: unknown[] = [];
     for (let i = 0; i < data.length; i++) {
-      if (i < def.items.length) {
-        const itemSchema = def.items[i];
+      if (i < items.length) {
+        const itemSchema = items[i];
         result.push(removeExtraFields(itemSchema, data[i]));
-      } else if (def.rest) {
-        result.push(removeExtraFields(def.rest, data[i]));
+      } else if (rest) {
+        result.push(removeExtraFields(rest, data[i]));
       } else {
         result.push(data[i]);
       }
     }
     return result;
   }
-  if (schema instanceof z.ZodUnion) {
-    const options = zodDef<{ options: z.ZodType[] }>(schema).options;
+  if (kind === 'union' || kind === 'discriminatedUnion') {
+    const options = getUnionOptions(schema);
     for (const option of options) {
       try {
         const stripped = removeExtraFields(option, data);
@@ -126,26 +145,11 @@ export function removeExtraFields(schema: z.ZodType, data: unknown): unknown {
     }
     return data;
   }
-  if (schema instanceof z.ZodDiscriminatedUnion) {
-    const options = zodDef<{ options: z.ZodType[] }>(schema).options;
-    for (const option of options) {
-      try {
-        const stripped = removeExtraFields(option, data);
-        const result = option.safeParse(stripped);
-        if (result.success) {
-          return stripped;
-        }
-      } catch {}
-    }
-    return data;
-  }
-  if (schema instanceof z.ZodIntersection) {
-    const { left, right } = zodDef<{ left: z.ZodType; right: z.ZodType }>(schema);
-    if (left instanceof z.ZodObject && right instanceof z.ZodObject) {
-      const leftDef = zodDef<{ shape: () => Record<string, z.ZodType> }>(left);
-      const rightDef = zodDef<{ shape: () => Record<string, z.ZodType> }>(right);
-      const leftShape = leftDef.shape();
-      const rightShape = rightDef.shape();
+  if (kind === 'intersection') {
+    const { left, right } = getIntersectionSides(schema);
+    if (zodKind(left) === 'object' && zodKind(right) === 'object') {
+      const leftShape = getObjectShape(left);
+      const rightShape = getObjectShape(right);
       const merged = z.object({ ...leftShape, ...rightShape });
       return removeExtraFields(merged, data);
     }
