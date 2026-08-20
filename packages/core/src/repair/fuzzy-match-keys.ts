@@ -1,5 +1,13 @@
-import { z } from 'zod';
-import { zodDef } from '../utils/zod-internals.js';
+import type { z } from 'zod';
+import {
+  getArrayElement,
+  getInnerType,
+  getLazyGetter,
+  getObjectShape,
+  getRecordKeyValue,
+  getUnionOptions,
+  zodKind,
+} from '../utils/zod-internals.js';
 
 /**
  * Normalizes a key for fuzzy comparison: lowercased with all non-alphanumeric
@@ -18,32 +26,35 @@ function normalizeKey(key: string): string {
  * Only keys that are unambiguously close to exactly one schema key are
  * renamed, and an exact match always wins. Keys with no close schema match
  * are left untouched (a later `remove-extra-fields` pass can drop them).
+ *
+ * Works with both zod 3 and zod 4 schema objects.
  */
 export function fuzzyMatchKeys(schema: z.ZodType, data: unknown): unknown {
+  const kind = zodKind(schema);
+
   // Unwrap wrappers, recursing into the inner type.
-  if (schema instanceof z.ZodOptional) {
+  if (kind === 'optional') {
     if (data === undefined) return data;
-    return fuzzyMatchKeys(schema.unwrap(), data);
+    return fuzzyMatchKeys(getInnerType(schema), data);
   }
-  if (schema instanceof z.ZodNullable) {
+  if (kind === 'nullable') {
     if (data === null) return data;
-    return fuzzyMatchKeys(schema.unwrap(), data);
+    return fuzzyMatchKeys(getInnerType(schema), data);
   }
-  if (schema instanceof z.ZodDefault) {
-    return fuzzyMatchKeys(schema.removeDefault(), data);
+  if (kind === 'default') {
+    return fuzzyMatchKeys(getInnerType(schema), data);
   }
-  if (schema instanceof z.ZodCatch) {
-    return fuzzyMatchKeys(schema.removeCatch(), data);
+  if (kind === 'catch') {
+    return fuzzyMatchKeys(getInnerType(schema), data);
   }
-  if (schema instanceof z.ZodLazy) {
-    const getter = zodDef<{ getter: () => z.ZodType }>(schema).getter;
-    return fuzzyMatchKeys(getter(), data);
+  if (kind === 'lazy') {
+    return fuzzyMatchKeys(getLazyGetter(schema)(), data);
   }
 
-  if (schema instanceof z.ZodObject) {
+  if (kind === 'object') {
     if (typeof data !== 'object' || data === null || Array.isArray(data)) return data;
 
-    const shape = zodDef<{ shape: () => Record<string, z.ZodType> }>(schema).shape();
+    const shape = getObjectShape(schema);
     const shapeKeys = Object.keys(shape);
 
     // Build a normalized -> canonical map, skipping ambiguous collisions.
@@ -74,22 +85,24 @@ export function fuzzyMatchKeys(schema: z.ZodType, data: unknown): unknown {
     return result;
   }
 
-  if (schema instanceof z.ZodArray) {
+  if (kind === 'array') {
     if (!Array.isArray(data)) return data;
-    return data.map((item) => fuzzyMatchKeys(schema.element, item));
+    const element = getArrayElement(schema);
+    return data.map((item) => fuzzyMatchKeys(element, item));
   }
 
-  if (schema instanceof z.ZodRecord) {
+  if (kind === 'record') {
     if (typeof data !== 'object' || data === null || Array.isArray(data)) return data;
+    const { valueType } = getRecordKeyValue(schema);
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
-      result[key] = fuzzyMatchKeys(schema.valueSchema, value);
+      result[key] = fuzzyMatchKeys(valueType, value);
     }
     return result;
   }
 
-  if (schema instanceof z.ZodUnion || schema instanceof z.ZodDiscriminatedUnion) {
-    const options = zodDef<{ options: z.ZodType[] }>(schema).options;
+  if (kind === 'union' || kind === 'discriminatedUnion') {
+    const options = getUnionOptions(schema);
     for (const option of options) {
       try {
         const matched = fuzzyMatchKeys(option, data);
