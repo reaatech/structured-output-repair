@@ -54,8 +54,8 @@ importers:
         specifier: ^3.1.1
         version: 3.2.4(@types/node@25.6.0)(esbuild@0.27.7)(yaml@2.8.3)
       zod:
-        specifier: ^3.23.0
-        version: 3.25.76
+        specifier: ^4.5.1
+        version: 4.5.4
       zod4:
         specifier: npm:zod@^4.4.3
         version: zod@4.4.3
@@ -64,13 +64,13 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.0.0
-        version: 1.29.0(zod@3.25.76)
+        version: 1.29.0(zod@4.5.4)
       '@reaatech/structured-repair-core':
         specifier: workspace:*
         version: link:../core
       zod:
-        specifier: ^3.23.0
-        version: 3.25.76
+        specifier: ^4.5.1
+        version: 4.5.4
     devDependencies:
       '@types/node':
         specifier: ^25.6.0
@@ -1973,11 +1973,11 @@ packages:
     peerDependencies:
       zod: ^3.25.28 || ^4
 
-  zod@3.25.76:
-    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
-
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
+
+  zod@4.5.4:
+    resolution: {integrity: sha512-sC95tT5iHHH9gtpj6A81kh+NEaRAUFN+qlUPDUbRfOMvNf5QCBqsb3WgvnpVtK5Y+4UfA6KqufotuTvMGiTlsA==}
 
 snapshots:
 
@@ -2342,7 +2342,7 @@ snapshots:
       globby: 11.1.0
       read-yaml-file: 1.1.0
 
-  '@modelcontextprotocol/sdk@1.29.0(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.29.0(zod@4.5.4)':
     dependencies:
       '@hono/node-server': 1.19.14(hono@4.12.21)
       ajv: 8.18.0
@@ -2359,8 +2359,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.2(zod@3.25.76)
+      zod: 4.5.4
+      zod-to-json-schema: 3.25.2(zod@4.5.4)
     transitivePeerDependencies:
       - supports-color
 
@@ -3784,10 +3784,10 @@ snapshots:
   yaml@2.8.3:
     optional: true
 
-  zod-to-json-schema@3.25.2(zod@3.25.76):
+  zod-to-json-schema@3.25.2(zod@4.5.4):
     dependencies:
-      zod: 3.25.76
-
-  zod@3.25.76: {}
+      zod: 4.5.4
 
   zod@4.4.3: {}
+
+  zod@4.5.4: {}
